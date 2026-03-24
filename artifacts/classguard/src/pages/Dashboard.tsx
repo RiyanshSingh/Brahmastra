@@ -11,7 +11,7 @@ import { RecentStudents } from "@/components/dashboard/RecentStudents";
 
 export default function Dashboard() {
   return (
-    <AppLayout title="Dashboard" subtitle="Here's what's happening with your classes today.">
+    <AppLayout title="Dashboard">
       <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
           {/* Left Column */}

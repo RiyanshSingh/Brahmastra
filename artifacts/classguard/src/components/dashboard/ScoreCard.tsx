@@ -58,8 +58,8 @@ export function ScoreCard() {
         )}
         
         <div className="mt-6 text-center">
-          <p className="text-sm font-medium text-foreground">Excellent accuracy</p>
-          <p className="text-xs text-muted-foreground mt-1">Based on facial + location matching</p>
+          <p className="text-sm font-medium text-foreground">Punch-to-class verification</p>
+          <p className="text-xs text-muted-foreground mt-1">Based on morning uploads and teacher rechecks</p>
         </div>
       </div>
     </motion.div>

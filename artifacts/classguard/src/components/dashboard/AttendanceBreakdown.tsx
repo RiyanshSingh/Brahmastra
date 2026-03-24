@@ -3,12 +3,10 @@ import { useDashboardStats } from "@/hooks/use-dashboard-data";
 
 export function AttendanceBreakdown() {
   const { data, isLoading } = useDashboardStats();
-
-  // Mock percentages since our API hook doesn't return exactly these
   const stats = [
-    { label: "Verified Present", value: 82, color: "bg-primary" },
-    { label: "Questionable Match", value: 12, color: "bg-warning" },
-    { label: "Absent", value: 6, color: "bg-destructive" },
+    { label: "Verified Present", value: data?.breakdown.verified ?? 0, color: "bg-primary" },
+    { label: "Needs Review", value: data?.breakdown.questionable ?? 0, color: "bg-warning" },
+    { label: "Absent", value: data?.breakdown.absent ?? 0, color: "bg-destructive" },
   ];
 
   return (

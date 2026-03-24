@@ -43,12 +43,15 @@ export function RecentStudents() {
             ))}
           </div>
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-1 -mx-2">
             {data?.map((student) => (
-              <div key={student.id} className="flex items-center justify-between group">
+              <div 
+                key={student.id} 
+                className="flex items-center justify-between p-2 rounded-2xl group transition-all duration-200 hover:bg-white/[0.03] cursor-pointer"
+              >
                 <div className="flex items-center gap-3">
                   <div className="relative">
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-muted border-2 border-card-border shadow-sm group-hover:scale-105 transition-transform">
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-muted border-2 border-card-border shadow-sm group-hover:scale-105 transition-transform duration-300">
                       <img src={`${import.meta.env.BASE_URL}${student.avatarUrl.replace('/images/', 'images/')}`} alt={student.name} className="w-full h-full object-cover" />
                     </div>
                     <div className="absolute -bottom-1 -right-1 bg-card rounded-full p-px">
@@ -56,16 +59,16 @@ export function RecentStudents() {
                     </div>
                   </div>
                   <div>
-                    <h4 className="text-sm font-semibold text-foreground">{student.name}</h4>
-                    <p className="text-xs text-muted-foreground">{student.time}</p>
+                    <h4 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">{student.name}</h4>
+                    <p className="text-[11px] text-muted-foreground">{student.time}</p>
                   </div>
                 </div>
                 
                 <div className={cn(
-                  "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                  student.status === 'verified' && "bg-success/15 text-success",
-                  student.status === 'questionable' && "bg-warning/15 text-warning",
-                  student.status === 'absent' && "bg-destructive/15 text-destructive"
+                  "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm",
+                  student.status === 'verified' && "bg-success/10 text-success border border-success/20",
+                  student.status === 'questionable' && "bg-warning/10 text-warning border border-warning/20",
+                  student.status === 'absent' && "bg-destructive/10 text-destructive border border-destructive/20"
                 )}>
                   {student.status}
                 </div>

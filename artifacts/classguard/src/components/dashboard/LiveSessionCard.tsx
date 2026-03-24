@@ -1,9 +1,21 @@
 import { motion } from "framer-motion";
-import { Radio, Users, Clock, Play } from "lucide-react";
+import { Users, Clock, Play } from "lucide-react";
+import { useLocation } from "wouter";
 import { useActiveSession } from "@/hooks/use-dashboard-data";
 
 export function LiveSessionCard() {
   const { data, isLoading } = useActiveSession();
+  const isActive = data?.isActive ?? false;
+  const [, setLocation] = useLocation();
+
+  const handleContinue = () => {
+    if (data?.classId) {
+      setLocation(`/classes?classId=${encodeURIComponent(data.classId)}`);
+      return;
+    }
+
+    setLocation("/classes");
+  };
 
   return (
     <motion.div 
@@ -14,9 +26,17 @@ export function LiveSessionCard() {
     >
       <div className="flex justify-between items-center mb-4">
         <h3 className="font-semibold text-lg text-foreground">Live Status</h3>
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-destructive/15 border border-destructive/20">
-          <div className="w-2 h-2 rounded-full bg-destructive animate-pulse"></div>
-          <span className="text-xs font-semibold text-destructive uppercase tracking-wider">Active</span>
+        <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${
+          isActive
+            ? "bg-destructive/15 border-destructive/20"
+            : "bg-muted border-card-border"
+        }`}>
+          <div className={`w-2 h-2 rounded-full ${isActive ? "bg-destructive animate-pulse" : "bg-muted-foreground"}`}></div>
+          <span className={`text-xs font-semibold uppercase tracking-wider ${
+            isActive ? "text-destructive" : "text-muted-foreground"
+          }`}>
+            {isActive ? "Active" : "Waiting"}
+          </span>
         </div>
       </div>
 
@@ -40,12 +60,22 @@ export function LiveSessionCard() {
               <span className="font-semibold font-mono text-foreground">{data?.timeElapsed}</span>
             </div>
           </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            {data?.markedCount ?? 0} students have self-marked attendance so far
+          </p>
         </div>
       )}
 
-      <button className="w-full py-4 rounded-xl font-semibold bg-gradient-to-r from-primary to-indigo-600 text-white shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2">
+      <button
+        onClick={handleContinue}
+        className={`w-full py-4 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+        isActive
+          ? "bg-gradient-to-r from-primary to-indigo-600 text-white shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/40 hover:-translate-y-0.5 active:translate-y-0"
+          : "bg-muted text-muted-foreground"
+      }`}
+      >
         <Play className="w-4 h-4 fill-current" />
-        Start Verification
+        {isActive ? "Continue Recheck" : "Upload Morning Punches"}
       </button>
     </motion.div>
   );

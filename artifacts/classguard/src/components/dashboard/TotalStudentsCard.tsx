@@ -22,11 +22,13 @@ export function TotalStudentsCard() {
           <Users className="w-5 h-5" />
           <span className="font-medium text-sm tracking-wide uppercase">Total Enrolled</span>
         </div>
-        {/* Decorative Chip similar to bank card */}
-        <div className="w-10 h-8 rounded border border-slate-600/50 bg-slate-800/50 flex flex-col justify-center gap-1 p-1.5 opacity-70">
-          <div className="w-full h-[1px] bg-slate-500"></div>
-          <div className="w-full h-[1px] bg-slate-500"></div>
-          <div className="w-full h-[1px] bg-slate-500"></div>
+        {/* More Options */}
+        <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors">
+          <div className="flex gap-1">
+            <div className="w-1 h-1 rounded-full bg-white/40"></div>
+            <div className="w-1 h-1 rounded-full bg-white/40"></div>
+            <div className="w-1 h-1 rounded-full bg-white/40"></div>
+          </div>
         </div>
       </div>
 
@@ -38,13 +40,13 @@ export function TotalStudentsCard() {
             <h3 className="text-5xl font-bold tracking-tight">
               {data?.totalStudents.toLocaleString()}
             </h3>
-            <div className="flex items-center gap-1 text-success mb-2 bg-success/10 px-2 py-1 rounded-md border border-success/20">
-              <TrendingUp className="w-3 h-3" />
-              <span className="text-xs font-bold">+{data?.enrollmentTrend}%</span>
+            <div className="flex items-center gap-1.5 text-success mb-2 bg-success/15 px-3 py-1 rounded-full border border-success/20 shadow-sm shadow-success/10">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span className="text-xs font-bold tracking-tight">+{data?.enrollmentTrend}%</span>
             </div>
           </div>
         )}
-        <p className="text-slate-400 text-sm mt-2">Across 42 active programs</p>
+        <p className="text-slate-400 text-sm mt-2">Across the classes tracked in Supabase</p>
       </div>
     </motion.div>
   );

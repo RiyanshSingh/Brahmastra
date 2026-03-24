@@ -7,14 +7,15 @@ export function HighlightCard() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="relative overflow-hidden rounded-[2rem] p-8 text-white shadow-xl shadow-primary/20 h-full min-h-[220px] flex flex-col justify-between group"
+      className="relative overflow-hidden rounded-[2rem] p-6 text-white shadow-xl shadow-primary/20 h-full flex flex-col justify-between group"
     >
       {/* Dynamic Gradient Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 via-primary to-purple-600 z-0"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-primary to-purple-700 z-0"></div>
       
-      {/* Decorative Glows */}
-      <div className="absolute -top-24 -right-24 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl group-hover:opacity-20 transition-opacity duration-700"></div>
-      <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-400 opacity-30 rounded-full blur-3xl"></div>
+      {/* Decorative Glows & Mesh-like effects */}
+      <div className="absolute -top-12 -right-12 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl group-hover:opacity-25 transition-opacity duration-700 animate-pulse"></div>
+      <div className="absolute top-1/2 left-1/4 w-32 h-32 bg-indigo-400 opacity-20 rounded-full blur-2xl"></div>
+      <div className="absolute -bottom-16 -left-16 w-56 h-56 bg-purple-400 opacity-30 rounded-full blur-3xl"></div>
 
       {/* Content */}
       <div className="relative z-10 flex justify-between items-start">
@@ -26,12 +27,13 @@ export function HighlightCard() {
         </div>
       </div>
 
-      <div className="relative z-10 mt-6">
-        <h2 className="text-2xl font-bold mb-2 leading-tight">
-          Real-time attendance <br/> verification made simple.
+      <div className="relative z-10">
+        <h2 className="text-xl md:text-2xl font-bold mb-2 leading-tight text-balance">
+          Real-time attendance verification made simple.
         </h2>
-        <button className="mt-4 flex items-center gap-2 text-sm font-medium hover:gap-3 transition-all duration-300 opacity-90 hover:opacity-100">
-          View Documentation <ArrowRight className="w-4 h-4" />
+        <button className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-white/5 group/btn">
+          View Documentation 
+          <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
         </button>
       </div>
     </motion.div>
