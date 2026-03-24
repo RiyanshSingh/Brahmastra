@@ -1,7 +1,5 @@
 import express, { type Express } from "express";
-import type { IncomingMessage, ServerResponse } from "node:http";
 import cors from "cors";
-import { pinoHttp } from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { HttpError } from "./lib/http";
@@ -9,25 +7,27 @@ import { env } from "./lib/env";
 
 const app: Express = express();
 
-app.use(
-  pinoHttp({
-    logger,
-    serializers: {
-      req(req: IncomingMessage) {
-        return {
-          id: req.id,
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+
+  res.on("finish", () => {
+    logger.info(
+      {
+        req: {
           method: req.method,
-          url: req.url?.split("?")[0],
-        };
-      },
-      res(res: ServerResponse) {
-        return {
+          url: req.originalUrl.split("?")[0],
+        },
+        res: {
           statusCode: res.statusCode,
-        };
+        },
+        responseTimeMs: Date.now() - startedAt,
       },
-    },
-  }),
-);
+      "Request completed",
+    );
+  });
+
+  next();
+});
 app.use(cors({ origin: env.corsOrigin === "*" ? true : env.corsOrigin }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
