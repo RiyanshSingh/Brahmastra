@@ -37,7 +37,7 @@ function StatCard({ title, value, icon, trend, trendDown, isLoading, delay, colo
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.5, delay }}
-      className="glass-card rounded-[2rem] p-6 shadow-sm hover:shadow-md transition-all duration-300"
+      className="dark-card rounded-[2rem] p-6 transition-all duration-300"
     >
       <div className="flex justify-between items-start mb-4">
         <div className={cn(
@@ -58,7 +58,7 @@ function StatCard({ title, value, icon, trend, trendDown, isLoading, delay, colo
       <div>
         <h4 className="text-sm font-medium text-muted-foreground mb-1">{title}</h4>
         {isLoading ? (
-          <div className="h-8 bg-slate-200 rounded w-24 animate-pulse"></div>
+          <div className="h-8 bg-muted rounded w-24 animate-pulse"></div>
         ) : (
           <div className="text-3xl font-bold text-foreground">{value}</div>
         )}

@@ -10,18 +10,18 @@ export function ScoreCard() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.3 }}
-      className="glass-card rounded-[2rem] p-6 shadow-md"
+      className="dark-card rounded-[2rem] p-6"
     >
       <div className="flex justify-between items-center mb-6">
         <h3 className="font-semibold text-lg text-foreground">Attendance Score</h3>
-        <button className="p-2 hover:bg-slate-100 rounded-full text-muted-foreground transition-colors">
+        <button className="p-2 hover:bg-muted rounded-full text-muted-foreground transition-colors">
           <MoreHorizontal className="w-5 h-5" />
         </button>
       </div>
 
       <div className="flex flex-col items-center justify-center py-4">
         {isLoading ? (
-          <div className="w-32 h-32 rounded-full border-8 border-slate-100 animate-pulse"></div>
+          <div className="w-32 h-32 rounded-full border-8 border-muted animate-pulse"></div>
         ) : (
           <div className="relative">
             {/* SVG Circular Progress */}
@@ -33,7 +33,7 @@ export function ScoreCard() {
                 stroke="currentColor"
                 strokeWidth="12"
                 fill="transparent"
-                className="text-slate-100"
+                className="text-muted"
               />
               <motion.circle
                 cx="72"

@@ -91,6 +91,24 @@ Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used b
 
 Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
 
+### `artifacts/classguard` (`@workspace/classguard`)
+
+React + Vite dashboard for a university attendance management system (ClassGuard). All data is mock (no real backend).
+
+**Design**: Dark premium theme — very dark background (`hsl(230,18%,7%)`), white left sidebar, dark cards (`hsl(230,16%,11%)`), soft indigo/green/amber/red accent palette, Inter font. Layout: `AppSidebar` (white) + `AppLayout` wrapper on all pages.
+
+**Pages**: Dashboard, Classes, Reports, Analytics — all using `AppLayout` with dark-card styling.
+
+**Key components**:
+- `src/components/layout/AppSidebar.tsx` — white sidebar with Logo, nav items (icon+label), user profile section
+- `src/components/layout/AppLayout.tsx` — wrapper with sidebar + dark topbar (search, bell, New button, optional action slot)
+- `src/components/dashboard/` — HighlightCard, TotalStudentsCard, LiveSessionCard, ScoreCard, StatCards, SessionsChart, AttendanceBreakdown, ActivityCalendar, RecentStudents
+- `src/hooks/use-dashboard-data.ts` — all mock data hooks with simulated 400–1000ms delays
+
+**CSS**: `src/index.css` — uses CSS custom properties for dark theme; `.dark-card` and `.dark-card-elevated` utility classes for consistent card styling.
+
+**Dev**: `pnpm --filter @workspace/classguard run dev`
+
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.

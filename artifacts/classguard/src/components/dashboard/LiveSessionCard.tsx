@@ -10,34 +10,34 @@ export function LiveSessionCard() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.2 }}
-      className="glass-card rounded-[2rem] p-6 shadow-lg h-full flex flex-col justify-between hover:shadow-xl transition-shadow duration-300"
+      className="dark-card rounded-[2rem] p-6 h-full flex flex-col justify-between"
     >
       <div className="flex justify-between items-center mb-4">
         <h3 className="font-semibold text-lg text-foreground">Live Status</h3>
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-50 border border-red-100">
-          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-          <span className="text-xs font-semibold text-red-600 uppercase tracking-wider">Active</span>
+        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-destructive/15 border border-destructive/20">
+          <div className="w-2 h-2 rounded-full bg-destructive animate-pulse"></div>
+          <span className="text-xs font-semibold text-destructive uppercase tracking-wider">Active</span>
         </div>
       </div>
 
       {isLoading ? (
         <div className="space-y-4 animate-pulse">
-          <div className="h-6 bg-slate-200 rounded w-3/4"></div>
-          <div className="h-4 bg-slate-200 rounded w-1/2"></div>
+          <div className="h-6 bg-muted rounded w-3/4"></div>
+          <div className="h-4 bg-muted rounded w-1/2"></div>
         </div>
       ) : (
-        <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 mb-6">
+        <div className="dark-card-elevated rounded-2xl p-5 mb-6">
           <h4 className="font-bold text-foreground mb-1">{data?.className}</h4>
           <p className="text-sm text-muted-foreground mb-4">{data?.room}</p>
           
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-primary" />
-              <span className="font-semibold">{data?.studentsCount} <span className="text-muted-foreground font-normal text-sm">students</span></span>
+              <span className="font-semibold text-foreground">{data?.studentsCount} <span className="text-muted-foreground font-normal text-sm">students</span></span>
             </div>
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-warning" />
-              <span className="font-semibold font-mono">{data?.timeElapsed}</span>
+              <span className="font-semibold font-mono text-foreground">{data?.timeElapsed}</span>
             </div>
           </div>
         </div>

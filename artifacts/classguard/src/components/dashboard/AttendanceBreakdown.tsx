@@ -16,14 +16,14 @@ export function AttendanceBreakdown() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.5 }}
-      className="glass-card rounded-[2rem] p-6 shadow-sm col-span-2"
+      className="dark-card rounded-[2rem] p-6 col-span-2"
     >
       <h3 className="font-semibold text-lg text-foreground mb-6">Verification Breakdown</h3>
       
       {isLoading ? (
         <div className="space-y-6 animate-pulse">
           {[1,2,3].map(i => (
-            <div key={i} className="h-12 bg-slate-100 rounded-xl"></div>
+            <div key={i} className="h-12 bg-muted rounded-xl"></div>
           ))}
         </div>
       ) : (
@@ -34,7 +34,7 @@ export function AttendanceBreakdown() {
                 <span className="text-foreground">{stat.label}</span>
                 <span className="text-muted-foreground">{stat.value}%</span>
               </div>
-              <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+              <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
                 <motion.div 
                   initial={{ width: 0 }}
                   animate={{ width: `${stat.value}%` }}
