@@ -1,0 +1,23 @@
+packages:
+  "recharts": "Required for the Sessions Activity and Attendance Breakdown charts"
+  "framer-motion": "Required for smooth, premium entry animations and micro-interactions"
+  "date-fns": "For formatting mock timestamps and calendar logic"
+  "clsx": "Utility for conditionally joining classNames"
+  "tailwind-merge": "Utility for merging tailwind classes without style conflicts"
+
+images:
+  - path: "artifacts/classguard/public/images/avatar-1.png"
+    description: "A professional headshot of a university student, soft lighting, modern"
+    aspect_ratio: "1:1"
+  - path: "artifacts/classguard/public/images/avatar-2.png"
+    description: "A professional headshot of a university student with glasses, friendly"
+    aspect_ratio: "1:1"
+  - path: "artifacts/classguard/public/images/avatar-3.png"
+    description: "A professional headshot of a young university student, smiling"
+    aspect_ratio: "1:1"
+  - path: "artifacts/classguard/public/images/avatar-4.png"
+    description: "A professional headshot of a university student, focused"
+    aspect_ratio: "1:1"
+
+notes:
+  - UI-only dashboard implementation simulating a backend response via TanStack Query.

@@ -1,0 +1,374 @@
+feature : One-pager: ClassGuard Attendance System
+
+1. TL;DR
+
+ClassGuard is a real-time attendance verification system that prevents proxy attendance in universities by combining location tracking, WiFi connectivity monitoring, and distance verification. Unlike traditional attendance systems where students can mark attendance and leave, ClassGuard enables teachers to verify student presence throughout the class session, ensuring only physically present students receive attendance credit.
+
+
+
+
+2. Goals
+
+Business Goals
+
+Reduce proxy attendance incidents by 95% within the first semester of implementation
+
+Increase actual classroom attendance rates by 30% through verified presence tracking
+
+Provide universities with accurate attendance data for compliance and accreditation purposes
+
+Create a scalable solution that can be deployed across multiple institutions
+
+User Goals
+
+Enable teachers to take and verify attendance quickly without disrupting class flow
+
+Allow teachers to identify absent students in real-time during class sessions
+
+Give students a simple, friction-free way to mark attendance when physically present
+
+Provide administrators with reliable attendance reports and analytics
+
+Non-Goals
+
+Building a complete learning management system (LMS) with grades, assignments, or course materials
+
+Implementing biometric authentication (fingerprint, facial recognition) in the initial version
+
+Creating a social platform for student communication
+
+Tracking student movement outside of class hours or designated learning spaces
+
+3. User stories
+
+Professor Sarah needs to ensure students attend her 200-person lecture hall class because attendance impacts course completion rates. She wants to verify that students who marked attendance are actually present throughout the session without manually calling names, which would waste 15 minutes of class time.
+
+
+
+
+Student Alex attends class regularly and wants a quick way to mark attendance without complicated check-ins. He's frustrated that his attendance record looks the same as classmates who leave after marking present.
+
+
+
+
+Department Administrator Michelle needs accurate attendance data for accreditation reports and to identify at-risk students early. She requires reliable data that can't be manipulated by proxy attendance schemes.
+
+
+
+
+Student Jordan occasionally arrives 10 minutes late due to transportation issues and worries about being marked absent even though she attends the full class. She needs a system that accounts for reasonable arrival windows.
+
+
+
+
+4. Functional requirements
+
+Must Have (P0)
+
+Student roster display showing name, roll number, and attendance status for each class session
+
+Real-time location tracking showing student's current location relative to classroom
+
+Distance calculation displaying each student's proximity to the teacher's device in meters
+
+WiFi connectivity status showing whether student is connected to campus network
+
+One-tap attendance marking interface for students
+
+Teacher dashboard showing all three verification signals (location, distance, WiFi) per student
+
+Mid-class verification allowing teachers to re-check attendance at any point during the session
+
+Attendance override capability for teachers to manually mark present/absent with notes
+
+Should Have (P1)
+
+Geofencing that auto-marks students present when they enter the classroom radius
+
+Attendance history view showing patterns over the semester
+
+Push notifications to students when attendance window opens and closes
+
+Bulk actions for teachers to mark multiple students absent/present
+
+Export functionality for attendance reports in CSV format
+
+Grace period settings allowing 10-15 minute arrival buffer
+
+Could Have (P2)
+
+Analytics dashboard showing attendance trends, at-risk students, and class averages
+
+Integration with existing university student information systems
+
+QR code backup for situations where location services fail
+
+Offline mode that syncs data when connection returns
+
+Multi-section support for teachers handling multiple class sections
+
+Won't Have (Initial Release)
+
+Student-to-student messaging features
+
+Grade tracking or assignment submission
+
+Video recording or lecture capture
+
+Payment or fee collection functionality
+
+5. User experience
+
+Teacher Journey
+
+Opens ClassGuard app and selects today's class section from schedule
+
+Views student roster with real-time status indicators (green = verified present, yellow = questionable, red = absent)
+
+Taps "Start Attendance" to open the 15-minute check-in window
+
+Students mark attendance on their devices within the window
+
+Teacher monitors the live dashboard showing three verification signals per student
+
+Mid-class (30 minutes in), teacher taps "Verify Attendance" to re-check all students
+
+System flags students whose location/WiFi status has changed significantly
+
+At class end, teacher reviews final attendance list and manually adjusts any edge cases
+
+Submits final attendance with one tap
+
+Student Journey
+
+Arrives at classroom and connects to campus WiFi
+
+Receives push notification that attendance is open
+
+Opens ClassGuard app and taps class name
+
+Taps "Mark Present" button (one action)
+
+Sees confirmation that attendance is recorded
+
+Stays in classroom as location is passively monitored
+
+No further action needed unless teacher runs mid-class verification
+
+Edge Cases & UI Notes
+
+Late arrivals: System allows teachers to set grace period (default 15 minutes). Students arriving within grace period can still mark attendance.
+
+WiFi issues: If campus WiFi is down, system falls back to cellular location tracking alone. Teacher sees warning indicator.
+
+GPS inaccuracy: Distance threshold set to 50 meters to account for GPS drift. Teachers can see exact distance reading for manual judgment.
+
+Students leaving mid-class: When student's location moves beyond geofence, status changes to yellow "Questionable." Teacher decides whether to mark absent.
+
+Device without location services: Student must enable location to use app. Clear onboarding screens explain privacy policy and necessity.
+
+Classroom basement/poor signal: Teacher can manually mark students present with photo documentation backup option.
+
+6. Narrative
+
+It's 9:00 AM on Tuesday, and Professor Sarah walks into her Engineering 101 lecture hall where 180 students are registered. She opens ClassGuard and taps "Start Attendance" for this section. Students' phones buzz with the notification.
+
+
+
+
+Alex, already seated in the third row, pulls out his phone, opens the app, and taps "Mark Present" on the Engineering 101 tile. It takes three seconds. The app confirms he's connected to campus WiFi "CampusNet-Building4" and is 12 meters from Professor Sarah's device. His name turns green on her dashboard.
+
+
+
+
+Meanwhile, Marcus is trying something different. He opens the app from his dorm room across campus, hoping to mark present and skip class. He taps "Mark Present" but the app shows his distance from the classroom as 2.3 kilometers. The system flags him as "Not in Range" and doesn't record attendance. His name stays red on Professor Sarah's screen.
+
+
+
+
+By 9:15 AM, Professor Sarah sees 165 students marked present with verified signals. She notes 15 absent students and starts her lecture. At 9:45 AM, during a break between topics, she taps "Verify Attendance" to run a mid-class check. The system re-evaluates all students' locations and WiFi status.
+
+
+
+
+The dashboard shows four yellow flags. Three students' locations have shifted beyond the geofence—they likely left after marking attendance. One student's WiFi disconnected but location shows still in the building (probably switched to cellular data). Professor Sarah makes a quick mental note and continues teaching, planning to review these cases after class.
+
+
+
+
+Jessica rushes in at 9:20 AM, late because her bus broke down. She immediately marks her attendance. Professor Sarah's screen shows Jessica is within the grace period and properly located in the classroom. With one tap, Sarah approves the late arrival.
+
+
+
+
+At the end of class, Professor Sarah reviews the final attendance: 162 verified present, 3 questionable (she marks them absent), 15 absent. She adds a note about Jessica's late arrival and submits. The entire process took less than two minutes of her attention across the 90-minute class.
+
+
+
+
+The next morning, Department Head Michelle opens her admin dashboard and sees Engineering 101's actual attendance rate is 89%—lower than the 97% that was being reported under the old honor system. Now she has accurate data to implement early intervention programs for chronically absent students.
+
+
+
+
+7. Success metrics
+
+Primary Metric: Verified attendance accuracy rate—target 95% correlation between marked attendance and actual physical presence
+
+Proxy attendance incidents reduced from baseline—target 90% reduction in first semester
+
+Teacher time spent on attendance reduced—target under 3 minutes per class session
+
+Student check-in completion rate within attendance window—target 85% within 5 minutes
+
+Mid-class verification flag rate—baseline metric to track how many students leave after initial check-in
+
+System uptime and reliability—target 99.5% availability during class hours
+
+User adoption rate—target 80% of eligible classes using the system within first semester
+
+Student app rating and feedback scores—target 4.0+ stars and 70%+ satisfaction
+
+Report generation usage by administrators—target 90% of departments using analytics features
+
+8. Milestones & sequencing
+
+Phase 1: Core MVP (Weeks 1-8)
+
+Basic student roster and attendance marking interface
+
+Location tracking and distance calculation
+
+WiFi connectivity status detection
+
+Teacher verification dashboard with real-time status
+
+Manual attendance override functionality
+
+Single institution pilot with 3-5 classes
+
+Phase 2: Enhanced Verification (Weeks 9-14)
+
+Mid-class re-verification feature
+
+Geofencing and automatic presence detection
+
+Grace period and late arrival handling
+
+Push notifications for students
+
+Attendance history and pattern views
+
+Expand pilot to 20-30 classes across multiple departments
+
+Phase 3: Scale & Polish (Weeks 15-20)
+
+Admin analytics dashboard
+
+Bulk actions and efficiency improvements
+
+CSV export and reporting tools
+
+Multi-section support for teachers
+
+Performance optimization for large lecture halls
+
+Full semester rollout across institution
+
+Phase 4: Integration & Growth (Weeks 21+)
+
+Integration with university student information systems
+
+QR code backup mechanism
+
+Offline mode with sync capability
+
+Cross-institution deployment toolkit
+
+Advanced analytics and at-risk student identification
+
+Expansion to multiple universities
+
+Team Requirements: 2 mobile developers (iOS + Android), 1 backend engineer, 1 product designer, 1 product manager (scrappy team, tight feedback loops). follow this design approach only: Design a modern SaaS dashboard UI with a clean, minimal, and premium look.
+
+Style:
+
+- Soft light theme with subtle shadows and rounded corners
+
+- Glassmorphism / neumorphism inspired cards
+
+- Smooth spacing and consistent padding
+
+- Use pastel colors (blue, green, orange accents)
+
+- Clean typography (modern sans-serif like Inter)
+
+Layout:
+
+- Top navigation bar with logo on left and user profile + settings on right
+
+- Horizontal tab navigation (Dashboard, Transactions, Reports, Analytics)
+
+Main Dashboard Sections:
+
+1. Left card:
+
+   - Highlight card with gradient background
+
+   - Motivational or product message
+
+2. Credit / Score Card:
+
+   - Title with small action button
+
+   - Big number (score/value)
+
+   - Progress bar or indicator
+
+3. Transactions / Analytics:
+
+   - Bar chart or activity graph
+
+   - Weekly or monthly filter dropdown
+
+4. Summary Cards:
+
+   - Total balance (with card design like bank card)
+
+   - Key metrics (numbers with labels)
+
+5. Calendar / Activity Section:
+
+   - Minimal calendar view with indicators
+
+6. Social / Connections:
+
+   - Small avatars or user icons
+
+7. Expense Breakdown:
+
+   - Horizontal bar chart with categories
+
+8. Available Balance / Wallet:
+
+   - Clean card with amount and action button
+
+Design Requirements:
+
+- Use card-based layout
+
+- Maintain strong visual hierarchy
+
+- Add hover effects and subtle animations
+
+- Keep UI uncluttered and professional
+
+- Ensure responsiveness (desktop-first)
+
+Important:
+
+- Do NOT generate dummy business logic
+
+- Only design UI structure and components
+
+- I will replace content/data later

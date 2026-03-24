@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "ClassGuard Dashboard"
+version = "1.0.0"
+id = "artifacts/classguard"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24145
+
+[services.development]
+run = "pnpm --filter @workspace/classguard run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/classguard", "run", "build" ]
+publicDir = "artifacts/classguard/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24145"
+BASE_PATH = "/"
