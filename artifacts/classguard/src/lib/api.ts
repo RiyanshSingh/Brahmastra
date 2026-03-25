@@ -23,6 +23,7 @@ type DbClass = {
   allowed_latitude: number | null;
   allowed_longitude: number | null;
   allowed_radius: number | null;
+  quiz_enabled: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -116,6 +117,20 @@ export type DashboardResponse = {
   activeSession: ActiveSession;
 };
 
+export type QuizQuestion = {
+  id?: string;
+  question_text: string;
+  options: string[];
+  correct_option_index: number;
+};
+
+export type Quiz = {
+  id: string;
+  class_id: string;
+  title: string;
+  questions: QuizQuestion[];
+};
+
 export type ClassSummary = {
   id: string;
   code: string;
@@ -133,6 +148,7 @@ export type ClassSummary = {
   allowedLatitude: number | null;
   allowedLongitude: number | null;
   allowedRadius: number | null;
+  quizEnabled: boolean;
   status: "active" | "scheduled" | "ended";
   uploadedCount: number;
   verifiedCount: number;
@@ -148,6 +164,7 @@ export type SessionPayload = {
     className: string;
     classCode: string;
     room: string;
+    quizEnabled: boolean;
     allowedWifiName: string | null;
     allowedWifiPublicIp: string | null;
     allowedLatitude: number | null;
@@ -551,6 +568,7 @@ function buildClassSummaries(
       allowedLatitude: classItem.allowed_latitude ?? null,
       allowedLongitude: classItem.allowed_longitude ?? null,
       allowedRadius: classItem.allowed_radius ?? null,
+      quizEnabled: classItem.quiz_enabled ?? false,
       status,
       ...summary,
     } satisfies ClassSummary;
@@ -610,6 +628,7 @@ function formatSessionPayload(
       allowedLatitude: classItem.allowed_latitude ?? null,
       allowedLongitude: classItem.allowed_longitude ?? null,
       allowedRadius: classItem.allowed_radius ?? null,
+      quizEnabled: classItem.quiz_enabled ?? false,
       sessionDate: session.session_date,
       sourceFileName: session.source_file_name ?? "Imported file",
       uploadCount: session.upload_count,
@@ -1591,4 +1610,98 @@ export async function getAnalytics(): Promise<AnalyticsResponse> {
     pieData,
     atRiskStudents,
   };
+}
+
+export async function fetchQuiz(classId: string): Promise<Quiz | null> {
+  const { data: quiz, error: quizError } = await supabase
+    .from("quizzes")
+    .select("*, quiz_questions(*)")
+    .eq("class_id", classId)
+    .maybeSingle();
+
+  if (quizError) throw quizError;
+  if (!quiz) return null;
+
+  return {
+    id: quiz.id,
+    class_id: quiz.class_id,
+    title: quiz.title,
+    questions: (quiz as any).quiz_questions ?? [],
+  } as Quiz;
+}
+
+export async function upsertQuiz(
+  classId: string,
+  title: string,
+  questions: QuizQuestion[],
+) {
+  const { data: existingQuiz } = await supabase
+    .from("quizzes")
+    .select("id")
+    .eq("class_id", classId)
+    .maybeSingle();
+
+  const quizId = existingQuiz?.id || crypto.randomUUID();
+
+  // 1. Delete old questions first to avoid foreign key issues or duplicates
+  await supabase.from("quiz_questions").delete().eq("quiz_id", quizId);
+
+  // 2. Upsert quiz
+  const { error: quizError } = await supabase.from("quizzes").upsert({
+    id: quizId,
+    class_id: classId,
+    title,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (quizError) throw quizError;
+
+  // 3. Insert new questions
+  const { error: questionsError } = await supabase.from("quiz_questions").insert(
+    questions.map((q) => ({
+      quiz_id: quizId,
+      question_text: q.question_text,
+      options: q.options,
+      correct_option_index: q.correct_option_index,
+    })),
+  );
+
+  if (questionsError) throw questionsError;
+
+  return quizId;
+}
+
+export async function submitQuizAndMarkAttendance(input: {
+  sessionId: string;
+  quizId: string;
+  answers: number[];
+  publicIp?: string;
+  latitude?: number;
+  longitude?: number;
+}): Promise<{ score: number; maxScore: number }> {
+  const { data, error } = await supabase.rpc("submit_quiz_and_mark_attendance", {
+    p_session_id: input.sessionId,
+    p_quiz_id: input.quizId,
+    p_answers: input.answers,
+    p_public_ip: input.publicIp || null,
+    p_latitude: input.latitude || null,
+    p_longitude: input.longitude || null,
+  });
+
+  if (error) throw error;
+  const result = (data as any)?.[0];
+  if (!result) return { score: 0, maxScore: 0 };
+  return {
+    score: result.score,
+    maxScore: result.max_score || result.max_questions || 0,
+  };
+}
+
+export async function updateClassQuizEnabled(classId: string, enabled: boolean) {
+  const { error } = await supabase
+    .from("classes")
+    .update({ quiz_enabled: enabled })
+    .eq("id", classId);
+
+  if (error) throw error;
 }

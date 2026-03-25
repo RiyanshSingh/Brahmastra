@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   UserRound,
   Users,
+  HelpCircle,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useClassesData, useLatestSessionData } from "@/hooks/use-attendance-data";
@@ -20,6 +21,8 @@ import { submitStudentMark } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useStudentAuth } from "@/providers/student-auth-provider";
+import { getEnrollmentByDevice } from "@/lib/student-auth";
+import { fetchQuiz, submitQuizAndMarkAttendance, type QuizQuestion } from "@/lib/api";
 
 function buildStudentToastError(
   error: Error,
@@ -110,6 +113,11 @@ export default function MarkAttendance() {
   const [formPassword, setFormPassword] = useState("");
   const [location, setLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [isDeviceBound, setIsDeviceBound] = useState(false);
+  const [isQuizzing, setIsQuizzing] = useState(false);
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
+  const [quizAnswers, setQuizAnswers] = useState<number[]>([]);
+  const [quizResult, setQuizResult] = useState<{ score: number; maxScore: number } | null>(null);
   const { data: latestSession, isLoading: isSessionLoading } = useLatestSessionData(
     selectedClassId || null,
   );
@@ -130,16 +138,38 @@ export default function MarkAttendance() {
           console.error("Geolocation error:", err);
           setLocationLoading(false);
         },
-        { 
-          enableHighAccuracy: true, 
-          timeout: 15000, 
-          maximumAge: 0 
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
         },
       );
       return () => navigator.geolocation.clearWatch(watchId);
     }
     return undefined;
   }, []);
+
+  useEffect(() => {
+    async function checkDeviceBinding() {
+      const boundEnrollment = await getEnrollmentByDevice();
+      if (boundEnrollment) {
+        setFormEnrollment(boundEnrollment);
+        setIsDeviceBound(true);
+        setAuthMode("login");
+      }
+    }
+    void checkDeviceBinding();
+  }, []);
+
+  useEffect(() => {
+    if (latestSession?.session.id && latestSession.session.quizEnabled) {
+      setQuizResult(null);
+      setQuizAnswers([]);
+      fetchQuiz(latestSession.session.classId).then((q) => {
+        if (q) setQuizQuestions(q.questions);
+      });
+    }
+  }, [latestSession?.session.id]);
 
   useEffect(() => {
     if (
@@ -163,16 +193,19 @@ export default function MarkAttendance() {
   const requiresPublicIpMatch = Boolean(requiredWifiPublicIp);
   const wifiIpMatches =
     !requiresPublicIpMatch || currentIp?.trim() === requiredWifiPublicIp?.trim();
-  
+
   const requiredLat = latestSession?.session.allowedLatitude ?? selectedClass?.allowedLatitude ?? null;
   const requiredLng = latestSession?.session.allowedLongitude ?? selectedClass?.allowedLongitude ?? null;
   const requiredRadius = latestSession?.session.allowedRadius ?? selectedClass?.allowedRadius ?? 100;
   const requiresLocation = requiredLat !== null && requiredLng !== null;
-  
+
   const canMarkAttendance =
-    Boolean(latestSession) && 
-    (!requiresPublicIpMatch || (Boolean(currentIp) && wifiIpMatches)) &&
-    (!requiresLocation || Boolean(location));
+    Boolean(latestSession) &&
+    (
+      (!requiresPublicIpMatch && !requiresLocation) ||
+      (requiresPublicIpMatch && wifiIpMatches) ||
+      (requiresLocation && location)
+    );
 
   const authMutation = useMutation({
     mutationFn: async () => {
@@ -255,6 +288,33 @@ export default function MarkAttendance() {
     },
   });
 
+  const quizMutation = useMutation({
+    mutationFn: async () => {
+      if (!latestSession || !latestSession.session.id || quizQuestions.length === 0) return;
+      const res = await submitQuizAndMarkAttendance({
+        sessionId: latestSession.session.id,
+        quizId: (quizQuestions[0] as any).quiz_id || "", 
+        answers: quizAnswers,
+        publicIp: currentIp ?? undefined,
+        latitude: location?.lat,
+        longitude: location?.lng,
+      });
+      return res;
+    },
+    onSuccess: (data) => {
+      if (data) setQuizResult(data);
+      toast({
+        title: "Assessment Submitted",
+        description: `Score: ${data?.score}/${data?.maxScore}. Attendance verified.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["latest-session"] });
+    },
+    onError: (error: Error) => {
+      const err = buildStudentToastError(error, "mark");
+      toast({ ...err, variant: "destructive" });
+    },
+  });
+
   const logoutMutation = useMutation({
     mutationFn: signOut,
     onSuccess: () => {
@@ -273,10 +333,7 @@ export default function MarkAttendance() {
   });
 
   return (
-    <AppLayout
-      title="Student Mark"
-      subtitle="Students sign in with enrollment number, the account stays bound to one device, and classes can optionally require a matching public IP."
-    >
+    <AppLayout title="Student Attendance">
       <div className="p-4 md:p-6">
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
           <motion.div
@@ -338,30 +395,32 @@ export default function MarkAttendance() {
               <div className="h-[520px] rounded-2xl bg-muted/30 animate-pulse" />
             ) : !session || !profile ? (
               <div className="space-y-6">
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    onClick={() => setAuthMode("login")}
-                    className={cn(
-                      "rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors",
-                      authMode === "login"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    Student Login
-                  </button>
-                  <button
-                    onClick={() => setAuthMode("signup")}
-                    className={cn(
-                      "rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors",
-                      authMode === "signup"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    Create Student Account
-                  </button>
-                </div>
+                {!isDeviceBound && (
+                  <div className="grid grid-cols-2 gap-2 bg-muted/20 p-1.5 rounded-2xl">
+                    <button
+                      onClick={() => setAuthMode("login")}
+                      className={cn(
+                        "w-full rounded-xl px-4 py-2 text-sm font-bold transition-all duration-200",
+                        authMode === "login"
+                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                          : "text-muted-foreground hover:bg-white/5",
+                      )}
+                    >
+                      Student Login
+                    </button>
+                    <button
+                      onClick={() => setAuthMode("signup")}
+                      className={cn(
+                        "w-full rounded-xl px-4 py-2 text-sm font-bold transition-all duration-200",
+                        authMode === "signup"
+                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                          : "text-muted-foreground hover:bg-white/5",
+                      )}
+                    >
+                      Signup
+                    </button>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                   <div className="space-y-4">
@@ -397,7 +456,8 @@ export default function MarkAttendance() {
                       <input
                         value={formEnrollment}
                         onChange={(event) => setFormEnrollment(event.target.value.toUpperCase())}
-                        className="mt-2 w-full rounded-xl border border-card-border bg-muted/60 px-4 py-3 text-sm text-foreground outline-none"
+                        disabled={isDeviceBound}
+                        className="mt-2 w-full rounded-xl border border-card-border bg-muted/60 px-4 py-3 text-sm text-foreground outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                         placeholder="0111CS231011"
                       />
                     </label>
@@ -563,7 +623,7 @@ export default function MarkAttendance() {
                             matched={Boolean(currentIp) && wifiIpMatches}
                             pending={!currentIp}
                           />
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-muted-foreground text-[10px] leading-tight opacity-70">
                             Attendance tabhi mark hogi jab current public IP teacher ke configured class IP se match karegi.
                           </p>
                         </div>
@@ -574,22 +634,107 @@ export default function MarkAttendance() {
                       )}
                     </div>
 
-                    <div className="rounded-2xl border border-card-border bg-muted/20 p-4">
-                      <div className="text-sm font-semibold text-foreground">
-                        Logged-in student
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-2">
-                        {profile.full_name}
-                      </div>
-                    </div>
+                    {latestSession?.session.quizEnabled && !quizResult ? (
+                      <div className="space-y-6">
+                         {!isQuizzing ? (
+                           <div className="py-8 text-center space-y-4 rounded-2xl border-2 border-dashed border-primary/20 bg-primary/5">
+                             <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                               <HelpCircle className="w-8 h-8" />
+                             </div>
+                             <div>
+                               <h3 className="text-xl font-bold text-foreground">Attendance Quiz Required</h3>
+                               <p className="text-xs text-muted-foreground max-w-[280px] mx-auto mt-2">
+                                 Your teacher has enabled a quiz gate for this session. Complete the assessment to verify your presence.
+                               </p>
+                             </div>
+                             <div className="px-6 pb-2">
+                               <button
+                                 onClick={() => setIsQuizzing(true)}
+                                 disabled={!canMarkAttendance}
+                                 className="w-full rounded-xl bg-primary px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 disabled:opacity-50"
+                               >
+                                 Start Assessment
+                               </button>
+                               {!canMarkAttendance && (
+                                 <p className="text-[10px] text-destructive mt-3 font-bold uppercase tracking-widest text-center">
+                                   Verify Geo/WiFi first
+                                 </p>
+                               )}
+                             </div>
+                           </div>
+                         ) : (
+                           <div className="space-y-6 py-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                             <div className="flex items-center justify-between pb-4 border-b border-card-border">
+                               <h3 className="text-lg font-bold text-foreground">Class Quiz</h3>
+                               <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">{quizAnswers.filter(a => a !== undefined).length} / {quizQuestions.length} Answered</span>
+                             </div>
 
-                    <button
-                      onClick={() => markMutation.mutate()}
-                      disabled={markMutation.isPending || !canMarkAttendance}
-                      className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {markMutation.isPending ? "Submitting..." : "Mark Attendance"}
-                    </button>
+                             <div className="space-y-8">
+                               {quizQuestions.map((q, qIdx) => (
+                                 <div key={qIdx} className="space-y-4">
+                                   <div className="flex gap-3">
+                                     <span className="shrink-0 w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{qIdx + 1}</span>
+                                     <h4 className="text-sm font-bold text-foreground leading-relaxed">
+                                       {q.question_text}
+                                     </h4>
+                                   </div>
+                                   <div className="grid grid-cols-1 gap-2.5 pl-9">
+                                     {q.options.map((opt, oIdx) => (
+                                       <button
+                                         key={oIdx}
+                                         onClick={() => {
+                                           const newAnsw = [...quizAnswers];
+                                           newAnsw[qIdx] = oIdx;
+                                           setQuizAnswers(newAnsw);
+                                         }}
+                                         className={cn(
+                                           "w-full text-left px-5 py-3.5 rounded-xl border text-sm transition-all duration-300",
+                                           quizAnswers[qIdx] === oIdx
+                                             ? "bg-primary border-primary text-primary-foreground shadow-lg shadow-primary/20"
+                                             : "bg-muted/40 border-card-border text-muted-foreground hover:bg-muted/60"
+                                         )}
+                                       >
+                                         {opt}
+                                       </button>
+                                     ))}
+                                   </div>
+                                 </div>
+                               ))}
+                             </div>
+
+                             <button
+                               onClick={() => quizMutation.mutate()}
+                               disabled={quizAnswers.length < quizQuestions.length || quizMutation.isPending}
+                               className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 px-6 py-4 text-sm font-bold text-white shadow-xl shadow-emerald-500/20 disabled:opacity-50 mt-4 h-14"
+                             >
+                               {quizMutation.isPending ? "Submitting Assessment..." : "Complete & Mark Attendance"}
+                             </button>
+                           </div>
+                         )}
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {quizResult && (
+                          <div className="p-6 rounded-2xl bg-success/10 border border-success/20 text-center animate-in zoom-in-95 duration-500">
+                             <div className="w-12 h-12 rounded-full bg-success/20 flex items-center justify-center text-success mx-auto mb-3">
+                               <CheckCircle2 className="w-6 h-6" />
+                             </div>
+                             <div className="text-[10px] uppercase font-black tracking-widest text-success/80 mb-1">Assessment Complete</div>
+                             <div className="text-4xl font-black text-foreground tracking-tight">
+                               {quizResult.score} / {quizResult.maxScore}
+                             </div>
+                             <p className="text-xs text-muted-foreground mt-2">Your attendance has been automatically verified.</p>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => markMutation.mutate()}
+                          disabled={markMutation.isPending || !canMarkAttendance || Boolean(quizResult)}
+                          className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 px-4 py-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60 h-14"
+                        >
+                          {markMutation.isPending ? "Submitting..." : quizResult ? "Attendance Marked" : "Finalize Attendance"}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -628,23 +773,7 @@ export default function MarkAttendance() {
                       </div>
                     )}
 
-                    {isSessionLoading ? (
-                      <div className="h-28 rounded-2xl bg-muted/30 animate-pulse" />
-                    ) : latestSession ? (
-                      <div className="rounded-2xl border border-card-border bg-muted/20 p-5">
-                        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                          <CheckCircle2 className="w-4 h-4 text-success" />
-                          Active session details
-                        </div>
-                        <div className="mt-3 grid grid-cols-2 gap-3">
-                          <InfoPill label="Punch rows" value={latestSession.session.uploadedCount} />
-                          <InfoPill label="Matched already" value={latestSession.session.matchedCount} />
-                          <InfoPill label="Session date" value={latestSession.session.sessionDate} />
-                          <InfoPill label="Status" value={latestSession.session.reviewStatus.replace(/_/g, " ")} />
-                          <InfoPill label="Allowed IP" value={requiredWifiPublicIp ?? "Open access"} />
-                        </div>
-                      </div>
-                    ) : null}
+
                   </div>
                 </div>
               </div>
@@ -672,7 +801,7 @@ function SummaryCard({
       <div className={cn("inline-flex rounded-xl bg-background p-2.5", tone)}>
         <Icon className="w-4 h-4" />
       </div>
-      <div className="mt-4 text-2xl font-bold text-foreground break-all">{value}</div>
+      <div className="mt-4 text-lg md:text-xl font-bold text-foreground tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">{value}</div>
       <div className="text-xs text-muted-foreground mt-1">{label}</div>
     </div>
   );
@@ -690,7 +819,7 @@ function InfoPill({
       <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
-      <div className="mt-1 text-sm font-semibold text-foreground break-all">{value}</div>
+      <div className="mt-1 text-sm font-semibold text-foreground truncate">{value}</div>
     </div>
   );
 }

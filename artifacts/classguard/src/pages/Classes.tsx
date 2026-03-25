@@ -16,6 +16,9 @@ import {
   Users,
   Wifi,
   XCircle,
+  HelpCircle,
+  Plus,
+  X,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { cn } from "@/lib/utils";
@@ -26,10 +29,14 @@ import {
   resetStudentDeviceBinding,
   saveSessionRecheck,
   updateClassGateways,
+  updateClassQuizEnabled,
+  upsertQuiz,
+  fetchQuiz,
   type AttendanceStatus,
   type ClassSummary,
   type SessionPayload,
   type UploadedWorkbookHistoryItem,
+  type QuizQuestion,
 } from "@/lib/api";
 import { getStatusLabel, parsePunchWorkbook } from "@/lib/attendance";
 import { fetchPublicIp } from "@/lib/student-auth";
@@ -73,6 +80,9 @@ export default function Classes() {
   const [allowedRadius, setAllowedRadius] = useState("");
   const [detectedPublicIp, setDetectedPublicIp] = useState("");
   const [detectedLocation, setDetectedLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
+  const [isDeviceBound, setIsDeviceBound] = useState(false);
+  const [quizEnabled, setQuizEnabled] = useState(false);
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [locationLoading, setLocationLoading] = useState(false);
   const [resetEnrollmentNo, setResetEnrollmentNo] = useState("");
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
@@ -116,13 +126,22 @@ export default function Classes() {
       ),
     );
   }, [latestSession]);
-
   useEffect(() => {
-    setAllowedWifiPublicIp(currentClass?.allowedWifiPublicIp ?? "");
-    setAllowedLatitude(currentClass?.allowedLatitude?.toString() ?? "");
-    setAllowedLongitude(currentClass?.allowedLongitude?.toString() ?? "");
-    setAllowedRadius(currentClass?.allowedRadius?.toString() ?? "");
-  }, [currentClass]);
+    if (currentClass) {
+      setAllowedWifiPublicIp(currentClass.allowedWifiPublicIp ?? "");
+      setAllowedLatitude(currentClass.allowedLatitude?.toString() ?? "");
+      setAllowedLongitude(currentClass.allowedLongitude?.toString() ?? "");
+      setAllowedRadius(currentClass.allowedRadius?.toString() ?? "");
+      setQuizEnabled(currentClass.quizEnabled ?? false);
+      
+      fetchQuiz(currentClass.id)
+        .then((q) => {
+          if (q) setQuizQuestions(q.questions);
+          else setQuizQuestions([]);
+        })
+        .catch(console.error);
+    }
+  }, [selectedClassId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -293,13 +312,19 @@ export default function Classes() {
         throw new Error("Choose a class before saving network rules.");
       }
 
-      return updateClassGateways(selectedClassId, {
+      await updateClassGateways(selectedClassId, {
         allowedWifiName: null,
         allowedWifiPublicIp,
         allowedLatitude: allowedLatitude ? parseFloat(allowedLatitude) : null,
         allowedLongitude: allowedLongitude ? parseFloat(allowedLongitude) : null,
         allowedRadius: allowedRadius ? parseInt(allowedRadius) : null,
       });
+
+      await updateClassQuizEnabled(selectedClassId, quizEnabled);
+      if (quizQuestions.length > 0) {
+        await upsertQuiz(selectedClassId, `${currentClass?.name || 'Class'} Quiz`, quizQuestions);
+      }
+      return true;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["classes"] });
@@ -389,10 +414,7 @@ export default function Classes() {
   });
 
   return (
-    <AppLayout
-      title="Classes"
-      subtitle="Match the morning punch sheet with student self-marked attendance, then finalize the review."
-    >
+    <AppLayout title="Attendance Classes">
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {summaryStrip.map((item, index) => (
@@ -835,17 +857,117 @@ export default function Classes() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
-                    Allowed Radius <span className="text-muted-foreground/40 lowercase font-medium ml-1">(Meters)</span>
-                  </span>
-                  <input
-                    type="number"
-                    value={allowedRadius}
-                    onChange={(event) => setAllowedRadius(event.target.value)}
-                    className="w-full rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-white/[0.05] transition-all"
-                    placeholder="e.g. 50"
-                  />
+                <div className="space-y-4 pt-4 border-t border-white/10">
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-primary/5 border border-primary/10 transition-all">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                        <HelpCircle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-bold text-foreground block">Quiz-Gated Attendance</span>
+                        <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Extra Verification</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setQuizEnabled(!quizEnabled)}
+                      className={cn(
+                        "relative w-11 h-6 rounded-full transition-colors duration-200 outline-none",
+                        quizEnabled ? "bg-primary" : "bg-white/10"
+                      )}
+                    >
+                      <div className={cn(
+                        "absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-200 transform shadow-sm",
+                        quizEnabled ? "left-6" : "left-1"
+                      )} />
+                    </button>
+                  </div>
+
+                  {quizEnabled && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="space-y-4"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                         <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">Quiz Questions ({quizQuestions.length})</span>
+                         <button
+                           type="button"
+                           onClick={() => setQuizQuestions([...quizQuestions, { question_text: "", options: ["", ""], correct_option_index: 0 }])}
+                           className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline"
+                         >
+                           <Plus className="w-3 h-3" /> Add Question
+                         </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        {quizQuestions.map((q, qIdx) => (
+                          <div key={qIdx} className="p-5 rounded-2xl bg-white/5 border border-white/5 space-y-4 relative group/q animate-in zoom-in-95 duration-300">
+                            <button
+                              type="button"
+                              onClick={() => setQuizQuestions(quizQuestions.filter((_, i) => i !== qIdx))}
+                              className="absolute top-2 right-2 p-1.5 text-muted-foreground hover:text-destructive opacity-100 lg:opacity-0 lg:group-hover/q:opacity-100 transition-opacity"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                            
+                            <div className="flex gap-4">
+                              <span className="shrink-0 w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-bold text-primary">{qIdx + 1}</span>
+                              <input
+                                value={q.question_text}
+                                onChange={(e) => {
+                                  const newQs = [...quizQuestions];
+                                  newQs[qIdx] = { ...newQs[qIdx], question_text: e.target.value };
+                                  setQuizQuestions(newQs);
+                                }}
+                                className="flex-1 bg-transparent border-none text-base font-bold text-foreground placeholder:text-muted-foreground/30 outline-none h-8"
+                                placeholder="Enter Question"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-12">
+                              {Array.from({ length: 4 }).map((_, oIdx) => (
+                                <div 
+                                  key={oIdx} 
+                                  className={cn(
+                                    "flex items-center gap-3 p-3 rounded-xl border transition-all",
+                                    q.correct_option_index === oIdx ? "bg-primary/10 border-primary/30" : "bg-black/20 border-white/5"
+                                  )}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newQs = [...quizQuestions];
+                                      newQs[qIdx] = { ...newQs[qIdx], correct_option_index: oIdx };
+                                      setQuizQuestions(newQs);
+                                    }}
+                                    className={cn(
+                                      "shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
+                                      q.correct_option_index === oIdx ? "bg-primary border-primary" : "bg-transparent border-white/20"
+                                    )}
+                                  >
+                                    {q.correct_option_index === oIdx && <div className="w-2 h-2 rounded-full bg-white" />}
+                                  </button>
+                                  <input
+                                    value={q.options[oIdx] || ""}
+                                    onChange={(e) => {
+                                      const newQs = [...quizQuestions];
+                                      const newOpts = [...newQs[qIdx].options];
+                                      newOpts[oIdx] = e.target.value;
+                                      newQs[qIdx] = { ...newQs[qIdx], options: newOpts };
+                                      setQuizQuestions(newQs);
+                                    }}
+                                    className="flex-1 bg-transparent border-none text-sm text-foreground placeholder:text-muted-foreground/30 outline-none"
+                                    placeholder={`Option ${oIdx + 1}`}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 pt-2">

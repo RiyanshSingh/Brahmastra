@@ -6,14 +6,15 @@ import {
   type ReactNode,
 } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { studentSupabase } from "@/lib/supabase";
 import {
-  loadCurrentStudentState,
   signInStudent,
   signOutStudent,
   signUpStudent,
+  getProfileByUserIdPublic,
   type StudentProfile,
 } from "@/lib/student-auth";
+import { fetchPublicIpSafe } from "@/lib/student-auth";
 
 type StudentAuthContextValue = {
   session: Session | null;
@@ -40,26 +41,57 @@ export function StudentAuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    async function bootstrap() {
-      setLoading(true);
-      try {
-        const state = await loadCurrentStudentState();
-        if (cancelled) return;
-        setSession(state.session);
-        setProfile(state.profile);
-        setCurrentIp(state.currentIp);
-      } finally {
-        if (!cancelled) setLoading(false);
+    // Step 1: Load the persisted session from localStorage immediately.
+    studentSupabase.auth.getSession().then(async ({ data }: { data: { session: Session | null } }) => {
+      if (cancelled) return;
+      const existingSession = data.session;
+      setSession(existingSession);
+
+      if (existingSession?.user) {
+        try {
+          const [prof, ip] = await Promise.all([
+            getProfileByUserIdPublic(existingSession.user.id),
+            fetchPublicIpSafe(),
+          ]);
+          if (!cancelled) {
+            setProfile(prof);
+            setCurrentIp(ip);
+          }
+        } catch (err) {
+          console.error("Profile load error:", err);
+        }
       }
-    }
 
-    void bootstrap();
+      if (!cancelled) setLoading(false);
+    });
 
+    // Step 2: Listen for real auth changes (login, logout, token refresh).
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = studentSupabase.auth.onAuthStateChange(async (event: string, nextSession: Session | null) => {
       if (cancelled) return;
+
+      // Ignore the INITIAL_SESSION event — we already handled it above.
+      if (event === "INITIAL_SESSION") return;
+
       setSession(nextSession);
+
+      if (nextSession?.user) {
+        try {
+          const [prof, ip] = await Promise.all([
+            getProfileByUserIdPublic(nextSession.user.id),
+            fetchPublicIpSafe(),
+          ]);
+          if (!cancelled) {
+            setProfile(prof);
+            setCurrentIp(ip);
+          }
+        } catch (err) {
+          console.error("Profile sync error:", err);
+        }
+      } else {
+        setProfile(null);
+      }
     });
 
     return () => {

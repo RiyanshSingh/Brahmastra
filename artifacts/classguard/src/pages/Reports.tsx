@@ -39,7 +39,7 @@ export default function Reports() {
   });
 
   return (
-    <AppLayout title="Reports" subtitle="Detailed logs for punch uploads and final classroom rechecks.">
+    <AppLayout title="Reports">
       <div className="p-6">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[

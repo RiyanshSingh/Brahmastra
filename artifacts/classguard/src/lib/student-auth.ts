@@ -1,5 +1,7 @@
 import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "./supabase";
+// studentSupabase: for auth sign-in/sign-up/RPC (persists session)
+// supabase: for direct table queries (anon key, no session conflicts)
+import { studentSupabase as supabase, supabase as anonSupabase } from "./supabase";
 
 export type StudentProfile = {
   id: string;
@@ -180,7 +182,7 @@ async function getCurrentDeviceContext(): Promise<{
 }
 
 async function getProfileByUserId(userId: string): Promise<StudentProfile | null> {
-  const { data, error } = await supabase
+  const { data, error } = await anonSupabase
     .from("student_profiles")
     .select("*")
     .eq("auth_user_id", userId)
@@ -390,13 +392,15 @@ export async function signOutStudent(): Promise<void> {
   }
 }
 
-export async function loadCurrentStudentState(): Promise<{
+export async function loadCurrentStudentState(
+  providedSession?: Session | null,
+): Promise<{
   session: Session | null;
   profile: StudentProfile | null;
   currentIp: string | null;
 }> {
   const [sessionResult, deviceContextResult] = await Promise.allSettled([
-    supabase.auth.getSession(),
+    providedSession ? Promise.resolve({ data: { session: providedSession } }) : supabase.auth.getSession(),
     getCurrentDeviceContext(),
   ]);
 
@@ -419,25 +423,30 @@ export async function loadCurrentStudentState(): Promise<{
     };
   }
 
-  const profile = await getProfileByUserId(session.user.id);
+  let profile = await getProfileByUserId(session.user.id);
 
-  if (profile && deviceContext) {
+  if (deviceContext) {
     try {
-      await claimStudentAccessLock({
-        user: session.user,
-        enrollmentNo: profile.enrollment_no,
-        fullName: profile.full_name,
-        currentIp: deviceContext.currentIp,
-        deviceFingerprint: deviceContext.deviceFingerprint,
-        deviceLabel: deviceContext.deviceLabel,
-      });
-    } catch {
-      await supabase.auth.signOut();
-      return {
-        session: null,
-        profile: null,
-        currentIp,
-      };
+      // Re-claim the access lock to keep the profile fresh and verified.
+      // If profile is missing, we use metadata from the auth user.
+      const enrollmentNo = profile?.enrollment_no || (session.user.user_metadata["enrollment_no"] as string | undefined);
+      const fullName = profile?.full_name || (session.user.user_metadata["full_name"] as string | undefined);
+
+      if (enrollmentNo && fullName) {
+         profile = await claimStudentAccessLock({
+          user: session.user,
+          enrollmentNo,
+          fullName,
+          currentIp: deviceContext.currentIp,
+          deviceFingerprint: deviceContext.deviceFingerprint,
+          deviceLabel: deviceContext.deviceLabel,
+        });
+      }
+    } catch (error: any) {
+      if (/another/.test(error.message)) {
+        await supabase.auth.signOut();
+        return { session: null, profile: null, currentIp };
+      }
     }
   }
 
@@ -448,4 +457,35 @@ export async function loadCurrentStudentState(): Promise<{
   };
 }
 
+export async function getEnrollmentByDevice(): Promise<string | null> {
+  try {
+    const { deviceFingerprint } = await getCurrentDeviceContext();
+    const { data, error } = await anonSupabase
+      .from("student_profiles")
+      .select("enrollment_no")
+      .eq("device_fingerprint", deviceFingerprint)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data.enrollment_no;
+  } catch {
+    return null;
+  }
+}
+
+/** Public wrapper so the auth provider can fetch a profile without triggering the full claimStudentAccessLock flow. */
+export async function getProfileByUserIdPublic(userId: string): Promise<StudentProfile | null> {
+  return getProfileByUserId(userId);
+}
+
+/** Safely fetch the current public IP — returns null instead of throwing. */
+export async function fetchPublicIpSafe(): Promise<string | null> {
+  try {
+    return await fetchPublicIp();
+  } catch {
+    return null;
+  }
+}
+
 export { fetchPublicIp, normalizeEnrollment };
+

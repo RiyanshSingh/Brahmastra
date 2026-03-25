@@ -683,4 +683,180 @@ grant execute on function public.reset_student_device_binding(text) to anon, aut
 grant execute on function public.teacher_reset_student_device_binding(text) to anon, authenticated;
 grant execute on function public.assert_student_access_available(text, text, text) to anon, authenticated;
 grant execute on function public.claim_student_access_lock(uuid, text, text, text, text, text) to authenticated;
-grant execute on function public.submit_student_mark_for_session(uuid, text, text) to authenticated;
+grant execute on function public.submit_student_mark_for_session(uuid, text, text, float8, float8) to authenticated;
+
+-- --------------------------------------------------------
+-- QUIZ FEATURE TABLES
+-- --------------------------------------------------------
+
+ALTER TABLE public.classes ADD COLUMN IF NOT EXISTS quiz_enabled BOOLEAN DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS public.quizzes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    class_id UUID NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+    title TEXT NOT NULL DEFAULT 'Class Quiz',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.quiz_questions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    quiz_id UUID NOT NULL REFERENCES public.quizzes(id) ON DELETE CASCADE,
+    question_text TEXT NOT NULL,
+    options TEXT[] NOT NULL,
+    correct_option_index INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.quiz_submissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    quiz_id UUID NOT NULL REFERENCES public.quizzes(id) ON DELETE CASCADE,
+    student_profile_id UUID NOT NULL REFERENCES public.student_profiles(id) ON DELETE CASCADE,
+    session_id UUID NOT NULL REFERENCES public.attendance_sessions(id) ON DELETE CASCADE,
+    answers INTEGER[] NOT NULL,
+    score INTEGER NOT NULL,
+    max_score INTEGER NOT NULL,
+    submitted_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(quiz_id, student_profile_id, session_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_quizzes_class_id ON public.quizzes(class_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_questions_quiz_id ON public.quiz_questions(quiz_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_submissions_session_id ON public.quiz_submissions(session_id);
+
+-- --------------------------------------------------------
+-- QUIZ SUBMISSION AND ATTENDANCE MARKING RPC
+-- --------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.submit_quiz_and_mark_attendance(
+    p_session_id UUID,
+    p_quiz_id UUID,
+    p_answers INTEGER[], -- student answers (0-based indices)
+    p_public_ip TEXT DEFAULT NULL,
+    p_latitude FLOAT8 DEFAULT NULL,
+    p_longitude FLOAT8 DEFAULT NULL
+)
+RETURNS TABLE (
+    score INTEGER,
+    max_score INTEGER
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_class_config RECORD;
+    v_session RECORD;
+    v_student_profile RECORD;
+    v_correct_count INTEGER := 0;
+    v_total_questions INTEGER := 0;
+    v_q_record RECORD;
+    v_idx INTEGER := 1;
+    v_loc_matches BOOLEAN := false;
+    v_wifi_matches BOOLEAN := false;
+    v_dist FLOAT8;
+BEGIN
+    -- 1. Get Context
+    SELECT * INTO v_session FROM public.attendance_sessions WHERE id = p_session_id;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Session not found'; END IF;
+
+    SELECT * INTO v_class_config FROM public.classes WHERE id = v_session.class_id;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Class not found'; END IF;
+
+    SELECT * INTO v_student_profile FROM public.student_profiles WHERE auth_user_id = auth.uid();
+    IF NOT FOUND THEN RAISE EXCEPTION 'Student profile not found'; END IF;
+
+    -- 2. Gating Check (WiFi OR Geo)
+    -- One of them must match if configured
+    IF v_class_config.allowed_wifi_public_ip IS NOT NULL AND p_public_ip IS NOT NULL THEN
+        IF btrim(v_class_config.allowed_wifi_public_ip) = btrim(p_public_ip) THEN
+            v_wifi_matches := true;
+        END IF;
+    END IF;
+
+    IF v_class_config.allowed_latitude IS NOT NULL AND v_class_config.allowed_longitude IS NOT NULL AND p_latitude IS NOT NULL AND p_longitude IS NOT NULL THEN
+        v_dist := public.calculate_distance(p_latitude, p_longitude, v_class_config.allowed_latitude, v_class_config.allowed_longitude);
+        IF v_dist <= COALESCE(v_class_config.allowed_radius, 100) THEN
+            v_loc_matches := true;
+        END IF;
+    END IF;
+
+    -- If either is set, at least one must pass. If neither set, allow.
+    IF (v_class_config.allowed_wifi_public_ip IS NOT NULL OR v_class_config.allowed_latitude IS NOT NULL) THEN
+        IF NOT (v_wifi_matches OR v_loc_matches) THEN
+            RAISE EXCEPTION 'Identity verification failed. You are either not on class WiFi or not in range.';
+        END IF;
+    END IF;
+
+    -- 3. Calculate Score
+    FOR v_q_record IN SELECT * FROM public.quiz_questions WHERE quiz_id = p_quiz_id ORDER BY created_at ASC LOOP
+        v_total_questions := v_total_questions + 1;
+        IF array_length(p_answers, 1) >= v_idx AND p_answers[v_idx] = v_q_record.correct_option_index THEN
+            v_correct_count := v_correct_count + 1;
+        END IF;
+        v_idx := v_idx + 1;
+    END LOOP;
+
+    IF v_total_questions = 0 THEN RAISE EXCEPTION 'Quiz has no questions'; END IF;
+
+    -- 4. Record Submission
+    INSERT INTO public.quiz_submissions (quiz_id, student_profile_id, session_id, answers, score, max_score)
+    VALUES (p_quiz_id, v_student_profile.id, p_session_id, p_answers, v_correct_count, v_total_questions)
+    ON CONFLICT (quiz_id, student_profile_id, session_id) DO UPDATE 
+    SET answers = EXCLUDED.answers, score = EXCLUDED.score, submitted_at = now();
+
+    -- 5. Mark Attendance (using existing logic with named parameters to avoid positional mismatch)
+    PERFORM public.submit_student_mark_for_session(
+        p_session_id := p_session_id,
+        p_public_ip := p_public_ip,
+        p_latitude := p_latitude,
+        p_longitude := p_longitude
+    );
+
+    RETURN QUERY SELECT v_correct_count, v_total_questions;
+END;
+$$;
+
+-- RPC TO UPSERT QUIZ AND QUESTIONS
+CREATE OR REPLACE FUNCTION public.upsert_quiz(
+    p_class_id UUID,
+    p_title TEXT,
+    p_questions JSONB -- Array of {question_text, options, correct_option_index}
+)
+RETURNS UUID AS $$
+DECLARE
+    v_quiz_id UUID;
+    v_q JSONB;
+BEGIN
+    -- 1. Check if quiz exists for class
+    SELECT id INTO v_quiz_id FROM public.quizzes WHERE class_id = p_class_id;
+    
+    IF v_quiz_id IS NOT NULL THEN
+        -- Update existing quiz
+        UPDATE public.quizzes SET title = p_title WHERE id = v_quiz_id;
+        -- Delete old questions
+        DELETE FROM public.quiz_questions WHERE quiz_id = v_quiz_id;
+    ELSE
+        -- Create new quiz
+        INSERT INTO public.quizzes (class_id, title)
+        VALUES (p_class_id, p_title)
+        RETURNING id INTO v_quiz_id;
+    END IF;
+
+    -- 2. Insert questions
+    FOR v_q IN SELECT * FROM jsonb_array_elements(p_questions) LOOP
+        INSERT INTO public.quiz_questions (quiz_id, question_text, options, correct_option_index)
+        VALUES (
+            v_quiz_id,
+            (v_q->>'question_text'),
+            ARRAY(SELECT jsonb_array_elements_text(v_q->'options')),
+            (v_q->>'correct_option_index')::INTEGER
+        );
+    END LOOP;
+
+    RETURN v_quiz_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.submit_quiz_and_mark_attendance(uuid, uuid, integer[], text, float8, float8) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.upsert_quiz(uuid, text, jsonb) TO authenticated;

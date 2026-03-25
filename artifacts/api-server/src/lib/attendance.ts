@@ -25,6 +25,7 @@ type DbClass = {
   allowed_latitude: number | null;
   allowed_longitude: number | null;
   allowed_radius: number | null;
+  quiz_enabled: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -405,6 +406,7 @@ function buildClassSummaries(
       allowedLatitude: classItem.allowed_latitude ?? null,
       allowedLongitude: classItem.allowed_longitude ?? null,
       allowedRadius: classItem.allowed_radius ?? null,
+      quizEnabled: classItem.quiz_enabled ?? false,
       status,
       ...summary,
     };
@@ -448,6 +450,7 @@ function formatSessionPayload(
       allowedLatitude: classItem.allowed_latitude ?? null,
       allowedLongitude: classItem.allowed_longitude ?? null,
       allowedRadius: classItem.allowed_radius ?? null,
+      quizEnabled: classItem.quiz_enabled ?? false,
       sessionDate: session.session_date,
       sourceFileName: session.source_file_name ?? "Imported file",
       uploadCount: session.upload_count,
