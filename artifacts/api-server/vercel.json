@@ -1,16 +1,18 @@
 {
   "version": 2,
+  "buildCommand": "node ./build.mjs && mkdir -p public",
+  "installCommand": "npm install",
   "outputDirectory": "public",
-  "builds": [
-    {
-      "src": "dist/app.mjs",
-      "use": "@vercel/node"
+  "functions": {
+    "api/[...route].js": {
+      "memory": 512,
+      "maxDuration": 30
     }
-  ],
+  },
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "dist/app.mjs"
+      "dest": "/api/[...route].js"
     }
   ]
 }
