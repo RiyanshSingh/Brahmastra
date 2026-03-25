@@ -108,10 +108,38 @@ export default function MarkAttendance() {
   const [formEnrollment, setFormEnrollment] = useState("");
   const [formName, setFormName] = useState("");
   const [formPassword, setFormPassword] = useState("");
-  const [enteredWifiName, setEnteredWifiName] = useState("");
+  const [location, setLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
   const { data: latestSession, isLoading: isSessionLoading } = useLatestSessionData(
     selectedClassId || null,
   );
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "geolocation" in navigator) {
+      setLocationLoading(true);
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          setLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          });
+          setLocationLoading(false);
+        },
+        (err) => {
+          console.error("Geolocation error:", err);
+          setLocationLoading(false);
+        },
+        { 
+          enableHighAccuracy: true, 
+          timeout: 15000, 
+          maximumAge: 0 
+        },
+      );
+      return () => navigator.geolocation.clearWatch(watchId);
+    }
+    return undefined;
+  }, []);
 
   useEffect(() => {
     if (
@@ -130,23 +158,21 @@ export default function MarkAttendance() {
 
   const selectedClass =
     activeClasses.find((item) => item.id === selectedClassId) ?? null;
-  const requiredWifiName =
-    latestSession?.session.allowedWifiName ?? selectedClass?.allowedWifiName ?? null;
   const requiredWifiPublicIp =
     latestSession?.session.allowedWifiPublicIp ?? selectedClass?.allowedWifiPublicIp ?? null;
-  const hasNetworkLock = Boolean(requiredWifiName);
   const requiresPublicIpMatch = Boolean(requiredWifiPublicIp);
-  const wifiNameMatches =
-    !hasNetworkLock ||
-    enteredWifiName.trim().toLowerCase() === requiredWifiName?.trim().toLowerCase();
   const wifiIpMatches =
     !requiresPublicIpMatch || currentIp?.trim() === requiredWifiPublicIp?.trim();
+  
+  const requiredLat = latestSession?.session.allowedLatitude ?? selectedClass?.allowedLatitude ?? null;
+  const requiredLng = latestSession?.session.allowedLongitude ?? selectedClass?.allowedLongitude ?? null;
+  const requiredRadius = latestSession?.session.allowedRadius ?? selectedClass?.allowedRadius ?? 100;
+  const requiresLocation = requiredLat !== null && requiredLng !== null;
+  
   const canMarkAttendance =
-    Boolean(latestSession) &&
-    (!hasNetworkLock ||
-      (wifiNameMatches &&
-        (!requiresPublicIpMatch || wifiIpMatches) &&
-        enteredWifiName.trim()));
+    Boolean(latestSession) && 
+    (!requiresPublicIpMatch || (Boolean(currentIp) && wifiIpMatches)) &&
+    (!requiresLocation || Boolean(location));
 
   const authMutation = useMutation({
     mutationFn: async () => {
@@ -190,29 +216,24 @@ export default function MarkAttendance() {
         throw new Error("Log in as a student and select an active class first.");
       }
 
-      if (hasNetworkLock) {
-        if (!enteredWifiName.trim()) {
-          throw new Error("Enter the connected Wi-Fi name before marking attendance.");
-        }
+      if (requiresPublicIpMatch && !currentIp) {
+        throw new Error("Your current public IP could not be detected.");
+      }
 
-        if (!wifiNameMatches) {
-          throw new Error("The entered Wi-Fi name does not match this class network.");
-        }
+      if (requiresPublicIpMatch && !wifiIpMatches) {
+        throw new Error(
+          `This class only allows attendance from public IP ${requiredWifiPublicIp}. Your current public IP is ${currentIp}.`,
+        );
+      }
 
-        if (requiresPublicIpMatch && !currentIp) {
-          throw new Error("Your current public IP could not be detected.");
-        }
-
-        if (requiresPublicIpMatch && !wifiIpMatches) {
-          throw new Error(
-            `This class only allows attendance from public IP ${requiredWifiPublicIp}. Your current public IP is ${currentIp}.`,
-          );
-        }
+      if (requiresLocation && !location) {
+        throw new Error("Your current geolocation could not be detected. Please enable GPS permissions.");
       }
 
       return submitStudentMark(latestSession.session.id, {
-        wifiName: enteredWifiName,
         currentIp,
+        latitude: location?.lat,
+        longitude: location?.lng,
       });
     },
     onSuccess: async (data) => {
@@ -254,7 +275,7 @@ export default function MarkAttendance() {
   return (
     <AppLayout
       title="Student Mark"
-      subtitle="Students sign in with enrollment number, the account stays bound to one device, and classes can optionally require a matching Wi-Fi name."
+      subtitle="Students sign in with enrollment number, the account stays bound to one device, and classes can optionally require a matching public IP."
     >
       <div className="p-4 md:p-6">
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
@@ -275,7 +296,7 @@ export default function MarkAttendance() {
                   Enrollment login with device binding.
                 </h2>
                 <p className="mt-3 text-sm text-white/80">
-                  One enrollment stays bound to one device, and teachers can optionally gate attendance by classroom Wi-Fi rules.
+                  One enrollment stays bound to one device, and teachers can optionally gate attendance by classroom public IP rules.
                 </p>
               </div>
             </div>
@@ -494,45 +515,61 @@ export default function MarkAttendance() {
 
                     <div className="rounded-2xl border border-card-border bg-muted/20 p-4">
                       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <MapPin className="w-4 h-4 text-primary" />
+                        Geolocation gate
+                      </div>
+                      {requiresLocation ? (
+                        <div className="mt-4 space-y-4">
+                          <InfoPill label="Target Radius" value={`${requiredRadius} meters`} />
+                          <GateStatus
+                            label="GPS link"
+                            matched={Boolean(location)}
+                            pending={locationLoading && !location}
+                          />
+                          {location?.accuracy && (
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/5 border border-primary/10">
+                              <div className={cn(
+                                "w-1.5 h-1.5 rounded-full animate-pulse",
+                                location.accuracy < 30 ? "bg-success" : "bg-warning"
+                              )} />
+                              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                GPS Accuracy: {location.accuracy.toFixed(0)}m
+                              </span>
+                            </div>
+                          )}
+                          {!location && !locationLoading && (
+                            <p className="text-xs text-destructive">
+                              Please enable location access in your browser settings to mark attendance.
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          No GPS location lock is configured for this class.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="rounded-2xl border border-card-border bg-muted/20 p-4">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                         <ShieldCheck className="w-4 h-4 text-success" />
                         Network gate
                       </div>
-                      {hasNetworkLock ? (
+                      {requiresPublicIpMatch ? (
                         <div className="mt-4 space-y-4">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <InfoPill label="Required Wi-Fi" value={requiredWifiName ?? "Not set"} />
-                            <InfoPill label="Required Public IP" value={requiredWifiPublicIp ?? "Optional"} />
-                          </div>
-                          <label className="block">
-                            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                              Connected Wi-Fi Name
-                            </span>
-                            <input
-                              value={enteredWifiName}
-                              onChange={(event) => setEnteredWifiName(event.target.value)}
-                              className="mt-2 w-full rounded-xl border border-card-border bg-muted/60 px-4 py-3 text-sm text-foreground outline-none"
-                              placeholder="Enter the exact Wi-Fi name"
-                            />
-                          </label>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <GateStatus
-                              label="Wi-Fi name match"
-                              matched={wifiNameMatches && Boolean(enteredWifiName.trim())}
-                              pending={!enteredWifiName.trim()}
-                            />
-                            <GateStatus
-                              label="Public IP match"
-                              matched={!requiresPublicIpMatch || (Boolean(currentIp) && wifiIpMatches)}
-                              pending={requiresPublicIpMatch && !currentIp}
-                            />
-                          </div>
+                          <InfoPill label="Required Public IP" value={requiredWifiPublicIp ?? "Not set"} />
+                          <GateStatus
+                            label="Public IP match"
+                            matched={Boolean(currentIp) && wifiIpMatches}
+                            pending={!currentIp}
+                          />
                           <p className="text-xs text-muted-foreground">
-                            Browser Wi-Fi SSID ko direct read nahi kar sakta, isliye student ko exact Wi-Fi name type karna padega. Public IP check sirf tab lagega jab teacher ne us class ke liye optional IP bhi set ki ho.
+                            Attendance tabhi mark hogi jab current public IP teacher ke configured class IP se match karegi.
                           </p>
                         </div>
                       ) : (
                         <p className="mt-2 text-sm text-muted-foreground">
-                          No Wi-Fi lock is configured for this class yet. Teacher can add it from the Classes page.
+                          No public IP lock is configured for this class yet.
                         </p>
                       )}
                     </div>
@@ -604,7 +641,6 @@ export default function MarkAttendance() {
                           <InfoPill label="Matched already" value={latestSession.session.matchedCount} />
                           <InfoPill label="Session date" value={latestSession.session.sessionDate} />
                           <InfoPill label="Status" value={latestSession.session.reviewStatus.replace(/_/g, " ")} />
-                          <InfoPill label="Wi-Fi Rule" value={requiredWifiName ?? "Open access"} />
                           <InfoPill label="Allowed IP" value={requiredWifiPublicIp ?? "Open access"} />
                         </div>
                       </div>

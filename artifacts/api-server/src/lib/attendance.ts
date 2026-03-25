@@ -20,6 +20,11 @@ type DbClass = {
   expected_students: number | null;
   color_start: string | null;
   color_end: string | null;
+  allowed_wifi_name: string | null;
+  allowed_wifi_public_ip: string | null;
+  allowed_latitude: number | null;
+  allowed_longitude: number | null;
+  allowed_radius: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -395,6 +400,11 @@ function buildClassSummaries(
       latestSessionId: latestSession?.id ?? null,
       latestSessionDate: latestSession?.session_date ?? null,
       reviewStatus: latestSession?.review_status ?? null,
+      allowedWifiName: classItem.allowed_wifi_name ?? null,
+      allowedWifiPublicIp: classItem.allowed_wifi_public_ip ?? null,
+      allowedLatitude: classItem.allowed_latitude ?? null,
+      allowedLongitude: classItem.allowed_longitude ?? null,
+      allowedRadius: classItem.allowed_radius ?? null,
       status,
       ...summary,
     };
@@ -433,6 +443,11 @@ function formatSessionPayload(
       className: classItem.name,
       classCode: classItem.code,
       room: classItem.room ?? "Room not set",
+      allowedWifiName: classItem.allowed_wifi_name ?? null,
+      allowedWifiPublicIp: classItem.allowed_wifi_public_ip ?? null,
+      allowedLatitude: classItem.allowed_latitude ?? null,
+      allowedLongitude: classItem.allowed_longitude ?? null,
+      allowedRadius: classItem.allowed_radius ?? null,
       sessionDate: session.session_date,
       sourceFileName: session.source_file_name ?? "Imported file",
       uploadCount: session.upload_count,
@@ -845,50 +860,94 @@ export async function getDashboardData() {
   const latestRecordsByClassSession = new Map<string, DbRecord[]>();
 
   for (const classSummary of classSummaries) {
-    if (!classSummary.latestSessionId) {
-      continue;
-    }
-
+    if (!classSummary.latestSessionId) continue;
     latestRecordsByClassSession.set(
       classSummary.latestSessionId,
       records.filter((record) => record.session_id === classSummary.latestSessionId),
     );
   }
 
+  const sessionMarksBySession = new Map<string, Set<string>>();
+  for (const mark of studentMarks) {
+    const set = sessionMarksBySession.get(mark.session_id) ?? new Set();
+    set.add(mark.roll_number.toUpperCase());
+    sessionMarksBySession.set(mark.session_id, set);
+  }
+
   const latestRecords = Array.from(latestRecordsByClassSession.values()).flat();
-  const verifiedPresent = latestRecords.filter(
-    (record) => record.status === "present" || record.status === "late_present",
-  ).length;
-  const flaggedToday = latestRecords.filter(
-    (record) => record.status === "left_after_punch" || record.status === "pending",
-  ).length;
+  const verifiedPresentMatched = latestRecords.filter((record: DbRecord) => {
+    const marks = sessionMarksBySession.get(record.session_id);
+    const hasMark = marks?.has(record.roll_number.toUpperCase());
+    return record.status === "present" || record.status === "late_present" || hasMark;
+  }).length;
+
+  const latestSessionIds = new Set(latestRecordsByClassSession.keys());
+  const unmatchedLatestMarks = studentMarks.filter((mark) => {
+    if (!latestSessionIds.has(mark.session_id)) return false;
+    const sessionRecords = latestRecordsByClassSession.get(mark.session_id) ?? [];
+    return !sessionRecords.some((r: DbRecord) => r.roll_number.toUpperCase() === mark.roll_number.toUpperCase());
+  }).length;
+
+  const verifiedPresent = verifiedPresentMatched + unmatchedLatestMarks;
+
+  const flaggedToday = latestRecords.filter((record: DbRecord) => {
+    const marks = sessionMarksBySession.get(record.session_id);
+    const hasMark = marks?.has(record.roll_number.toUpperCase());
+    return (record.status === "left_after_punch" || record.status === "pending") && !hasMark;
+  }).length;
+
   const totalStudents = classSummaries.reduce(
-    (sum, classItem) => sum + Math.max(classItem.expectedStudents, classItem.uploadedCount),
+    (sum, classItem) => sum + classItem.uploadedCount,
     0,
   );
-  const score =
-    latestRecords.length === 0
-      ? 0
-      : Math.round((verifiedPresent / latestRecords.length) * 100);
 
-  const last7Days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (6 - index));
-    const isoDate = date.toISOString().slice(0, 10);
-    const dayLabel = date.toLocaleDateString("en-US", { weekday: "short" });
-    const dailyRecords = records.filter((record) => {
-      const session = sessionMap.get(record.session_id);
-      return session?.session_date === isoDate;
+  const totalPossible = latestRecords.length + unmatchedLatestMarks;
+  const score = totalPossible === 0 ? 0 : Math.round((verifiedPresent / totalPossible) * 100);
+
+    const last7Days = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - index));
+      const isoDate = date.toISOString().slice(0, 10);
+      const dayLabel = date.toLocaleDateString("en-US", { weekday: "short" });
+      const dailyRecords = records.filter((r) => {
+        const s = sessionMap.get(r.session_id);
+        return s?.session_date === isoDate;
+      });
+      const dailySessions = sessions.filter(s => s.session_date === isoDate);
+      const dailySessionIds = new Set(dailySessions.map(s => s.id));
+      const dayMarks = studentMarks.filter(m => dailySessionIds.has(m.session_id));
+      const marksBySession = new Map<string, Set<string>>();
+      for (const m of dayMarks) {
+        const set = marksBySession.get(m.session_id) ?? new Set();
+        set.add(m.roll_number.toUpperCase());
+        marksBySession.set(m.session_id, set);
+      }
+
+      const verified = dailyRecords.filter((r) => {
+        const marks = marksBySession.get(r.session_id);
+        return r.status === "present" || r.status === "late_present" || marks?.has(r.roll_number.toUpperCase());
+      }).length;
+
+      const unmatched = dayMarks.filter(m => {
+        const sessionRecords = dailyRecords.filter(r => r.session_id === m.session_id);
+        return !sessionRecords.some(r => r.roll_number.toUpperCase() === m.roll_number.toUpperCase());
+      }).length;
+
+      const questionable = dailyRecords.filter((r) => {
+        const marks = marksBySession.get(r.session_id);
+        const hasMark = marks?.has(r.roll_number.toUpperCase());
+        return (r.status === "left_after_punch" || r.status === "pending") && !hasMark;
+      }).length;
+
+      const absent = dailyRecords.filter(r => r.status === "absent" && !marksBySession.get(r.session_id)?.has(r.roll_number.toUpperCase())).length;
+
+      return {
+        day: dayLabel,
+        present: verified + unmatched,
+        questionable,
+        absent,
+      };
     });
-    const dailySummary = summarizeRecords(dailyRecords);
-
-    return {
-      day: dayLabel,
-      present: dailySummary.verifiedCount,
-      questionable: dailySummary.questionableCount,
-      absent: dailySummary.absentCount,
-    };
-  });
 
   const previousWeekVerified = records.filter((record) => {
     const session = sessionMap.get(record.session_id);
@@ -971,20 +1030,14 @@ export async function getDashboardData() {
       totalStudents,
       enrollmentTrend,
       breakdown: {
-        verified:
-          latestSummary.uploadedCount === 0
-            ? 0
-            : Math.round((latestSummary.verifiedCount / latestSummary.uploadedCount) * 100),
-        questionable:
-          latestSummary.uploadedCount === 0
+        verified: totalPossible === 0 ? 0 : Math.round((verifiedPresent / totalPossible) * 100),
+        questionable: totalPossible === 0 ? 0 : Math.round((flaggedToday / totalPossible) * 100),
+        absent:
+          totalPossible === 0
             ? 0
             : Math.round(
-                (latestSummary.questionableCount / latestSummary.uploadedCount) * 100,
+                (Math.max(0, totalPossible - verifiedPresent - flaggedToday) / totalPossible) * 100,
               ),
-        absent:
-          latestSummary.uploadedCount === 0
-            ? 0
-            : Math.round((latestSummary.absentCount / latestSummary.uploadedCount) * 100),
       },
     },
     chart: last7Days,

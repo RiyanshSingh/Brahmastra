@@ -46,7 +46,7 @@ export function TotalStudentsCard() {
             </div>
           </div>
         )}
-        <p className="text-slate-400 text-sm mt-2">Across the classes tracked in Supabase</p>
+        <p className="text-slate-400 text-sm mt-2">Rows across all uploaded Excel sheets</p>
       </div>
     </motion.div>
   );

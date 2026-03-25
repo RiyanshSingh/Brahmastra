@@ -1,5 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { getAnalytics, getClasses, getLatestSession, getReports } from "@/lib/api";
+import {
+  getAnalytics,
+  getClasses,
+  getClassUploadHistory,
+  getLatestSession,
+  getReports,
+} from "@/lib/api";
 
 export function useClassesData() {
   return useQuery({
@@ -12,6 +18,14 @@ export function useLatestSessionData(classId: string | null) {
   return useQuery({
     queryKey: ["classes", "latest-session", classId],
     queryFn: () => getLatestSession(classId as string),
+    enabled: Boolean(classId),
+  });
+}
+
+export function useClassUploadHistoryData(classId: string | null) {
+  return useQuery({
+    queryKey: ["classes", "upload-history", classId],
+    queryFn: () => getClassUploadHistory(classId as string),
     enabled: Boolean(classId),
   });
 }

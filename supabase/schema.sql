@@ -21,6 +21,9 @@ create table if not exists public.classes (
   color_end text not null default '#7c3aed',
   allowed_wifi_name text,
   allowed_wifi_public_ip text,
+  allowed_latitude float8,
+  allowed_longitude float8,
+  allowed_radius integer,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -30,6 +33,15 @@ alter table public.classes
 
 alter table public.classes
   add column if not exists allowed_wifi_public_ip text;
+
+alter table public.classes
+  add column if not exists allowed_latitude float8;
+
+alter table public.classes
+  add column if not exists allowed_longitude float8;
+
+alter table public.classes
+  add column if not exists allowed_radius integer; -- in meters
 
 create table if not exists public.attendance_sessions (
   id uuid primary key default gen_random_uuid(),
@@ -271,10 +283,65 @@ begin
 end;
 $$;
 
+create or replace function public.teacher_reset_student_device_binding(
+  p_enrollment_no text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  result_profile public.student_profiles;
+begin
+  update public.student_profiles
+  set
+    current_ip = null,
+    device_fingerprint = null,
+    device_label = null,
+    device_bound_at = null,
+    last_logout_at = now()
+  where enrollment_no = upper(btrim(p_enrollment_no))
+  returning * into result_profile;
+
+  if result_profile.id is null then
+    raise exception 'No student device binding was found for enrollment %.', upper(btrim(p_enrollment_no));
+  end if;
+
+  return jsonb_build_object(
+    'enrollment_no',
+    result_profile.enrollment_no
+  );
+end;
+$$;
+
+create or replace function public.calculate_distance(lat1 float8, lon1 float8, lat2 float8, lon2 float8)
+returns float8
+language plpgsql
+as $$
+declare
+  r float8 := 6371000; -- meters
+  phi1 float8 := lat1 * pi() / 180;
+  phi2 float8 := lat2 * pi() / 180;
+  delta_phi float8 := (lat2 - lat1) * pi() / 180;
+  delta_lambda float8 := (lon2 - lon1) * pi() / 180;
+  a float8;
+  c float8;
+begin
+  a := sin(delta_phi / 2) * sin(delta_phi / 2) +
+       cos(phi1) * cos(phi2) *
+       sin(delta_lambda / 2) * sin(delta_lambda / 2);
+  c := 2 * atan2(sqrt(a), sqrt(1 - a));
+  return r * c;
+end;
+$$;
+
 create or replace function public.submit_student_mark_for_session(
   p_session_id uuid,
   p_wifi_name text default null,
-  p_public_ip text default null
+  p_public_ip text default null,
+  p_latitude float8 default null,
+  p_longitude float8 default null
 )
 returns void
 language plpgsql
@@ -316,18 +383,24 @@ begin
     raise exception 'Student profile not found for this login.';
   end if;
 
-  if class_config.allowed_wifi_name is not null then
-    if p_wifi_name is null
-      or lower(btrim(p_wifi_name)) <> lower(btrim(class_config.allowed_wifi_name)) then
-      raise exception 'This class requires Wi-Fi name %.', class_config.allowed_wifi_name;
+  if class_config.allowed_wifi_public_ip is not null
+    and (
+      p_public_ip is null
+      or btrim(p_public_ip) <> btrim(class_config.allowed_wifi_public_ip)
+    ) then
+    raise exception 'This class only allows attendance from public IP %.', class_config.allowed_wifi_public_ip;
+  end if;
+
+  if class_config.allowed_latitude is not null and class_config.allowed_longitude is not null then
+    if p_latitude is null or p_longitude is null then
+      raise exception 'Geolocation is required for this class.';
     end if;
 
-    if class_config.allowed_wifi_public_ip is not null
-      and (
-        p_public_ip is null
-        or btrim(p_public_ip) <> btrim(class_config.allowed_wifi_public_ip)
-      ) then
-      raise exception 'This class only allows attendance from public IP %.', class_config.allowed_wifi_public_ip;
+    if public.calculate_distance(
+        p_latitude, p_longitude, 
+        class_config.allowed_latitude, class_config.allowed_longitude
+      ) > coalesce(class_config.allowed_radius, 100) then
+      raise exception 'You must be within % meters of the classroom to mark attendance.', coalesce(class_config.allowed_radius, 100);
     end if;
   end if;
 
@@ -595,17 +668,19 @@ to anon, authenticated
 using (true);
 
 drop policy if exists "student profiles self access" on public.student_profiles;
-create policy "student profiles self access"
+drop policy if exists "demo student profiles access" on public.student_profiles;
+create policy "demo student profiles access"
 on public.student_profiles
 for all
-to authenticated
-using (auth.uid() = auth_user_id)
-with check (auth.uid() = auth_user_id);
+to anon, authenticated
+using (true)
+with check (true);
 
 grant execute on function public.assert_student_ip_available(text, text) to anon, authenticated;
 grant execute on function public.claim_student_ip_lock(uuid, text, text, text) to authenticated;
 grant execute on function public.release_student_ip_lock(uuid) to authenticated;
 grant execute on function public.reset_student_device_binding(text) to anon, authenticated;
+grant execute on function public.teacher_reset_student_device_binding(text) to anon, authenticated;
 grant execute on function public.assert_student_access_available(text, text, text) to anon, authenticated;
 grant execute on function public.claim_student_access_lock(uuid, text, text, text, text, text) to authenticated;
 grant execute on function public.submit_student_mark_for_session(uuid, text, text) to authenticated;

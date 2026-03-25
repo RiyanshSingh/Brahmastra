@@ -17,7 +17,6 @@ export type StudentProfile = {
 };
 
 const STUDENT_EMAIL_DOMAIN = "student.classguard.app";
-const STUDENT_DEVICE_TOKEN_KEY = "classguard.student.device-token";
 
 function normalizeEnrollment(enrollment: string): string {
   return enrollment.trim().toUpperCase();
@@ -132,25 +131,6 @@ async function fetchPublicIp(): Promise<string> {
   throw new Error("Unable to fetch your public IP address right now.");
 }
 
-function getStoredDeviceToken(): string {
-  if (typeof window === "undefined") {
-    throw new Error("Device storage is unavailable outside the browser.");
-  }
-
-  const existingToken = window.localStorage.getItem(STUDENT_DEVICE_TOKEN_KEY);
-  if (existingToken) {
-    return existingToken;
-  }
-
-  const nextToken =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-  window.localStorage.setItem(STUDENT_DEVICE_TOKEN_KEY, nextToken);
-  return nextToken;
-}
-
 async function sha256Hex(value: string): Promise<string> {
   if (typeof crypto === "undefined" || !crypto.subtle) {
     return value;
@@ -167,21 +147,22 @@ async function getCurrentDeviceContext(): Promise<{
   deviceFingerprint: string;
   deviceLabel: string;
 }> {
-  const token = getStoredDeviceToken();
   const currentIpResult = await Promise.allSettled([fetchPublicIp()]);
   const currentIp =
     currentIpResult[0]?.status === "fulfilled" ? currentIpResult[0].value : null;
+  const deviceMemory =
+    "deviceMemory" in navigator
+      ? String((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? "")
+      : "";
 
   const fingerprintSeed = [
-    token,
     navigator.userAgent,
     navigator.language,
     navigator.platform,
-    String(screen.width),
-    String(screen.height),
     Intl.DateTimeFormat().resolvedOptions().timeZone,
     String(navigator.hardwareConcurrency ?? ""),
     String(navigator.maxTouchPoints ?? ""),
+    deviceMemory,
   ].join("|");
 
   const deviceFingerprint = await sha256Hex(fingerprintSeed);

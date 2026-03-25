@@ -7,9 +7,11 @@ import {
   CheckCircle2,
   Clock,
   FileSpreadsheet,
+  MapPin,
   Play,
   Search,
   ShieldCheck,
+  Trash2,
   Upload,
   Users,
   Wifi,
@@ -18,17 +20,24 @@ import {
 import { AppLayout } from "@/components/layout/AppLayout";
 import { cn } from "@/lib/utils";
 import {
+  clearClassUploadHistory,
+  deleteUploadedWorkbook,
   importPunches,
   resetStudentDeviceBinding,
   saveSessionRecheck,
-  updateClassNetworkCredentials,
+  updateClassGateways,
   type AttendanceStatus,
   type ClassSummary,
   type SessionPayload,
+  type UploadedWorkbookHistoryItem,
 } from "@/lib/api";
 import { getStatusLabel, parsePunchWorkbook } from "@/lib/attendance";
 import { fetchPublicIp } from "@/lib/student-auth";
-import { useClassesData, useLatestSessionData } from "@/hooks/use-attendance-data";
+import {
+  useClassUploadHistoryData,
+  useClassesData,
+  useLatestSessionData,
+} from "@/hooks/use-attendance-data";
 import { useToast } from "@/hooks/use-toast";
 
 const STATUS_OPTIONS: AttendanceStatus[] = [
@@ -58,13 +67,22 @@ export default function Classes() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [search, setSearch] = useState("");
   const [reviewerName, setReviewerName] = useState("Teacher");
-  const [allowedWifiName, setAllowedWifiName] = useState("");
   const [allowedWifiPublicIp, setAllowedWifiPublicIp] = useState("");
+  const [allowedLatitude, setAllowedLatitude] = useState("");
+  const [allowedLongitude, setAllowedLongitude] = useState("");
+  const [allowedRadius, setAllowedRadius] = useState("");
   const [detectedPublicIp, setDetectedPublicIp] = useState("");
+  const [detectedLocation, setDetectedLocation] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
   const [resetEnrollmentNo, setResetEnrollmentNo] = useState("");
+  const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
   const { data: latestSession, isLoading: isSessionLoading } = useLatestSessionData(
     selectedClassId || null,
   );
+  const {
+    data: uploadHistory = [],
+    isLoading: isUploadHistoryLoading,
+  } = useClassUploadHistoryData(selectedClassId || null);
   const [draftStatuses, setDraftStatuses] = useState<Record<string, AttendanceStatus>>({});
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
   const currentClass = classes.find((item) => item.id === selectedClassId) ?? null;
@@ -100,9 +118,11 @@ export default function Classes() {
   }, [latestSession]);
 
   useEffect(() => {
-    setAllowedWifiName(currentClass?.allowedWifiName ?? "");
     setAllowedWifiPublicIp(currentClass?.allowedWifiPublicIp ?? "");
-  }, [currentClass?.allowedWifiName, currentClass?.allowedWifiPublicIp]);
+    setAllowedLatitude(currentClass?.allowedLatitude?.toString() ?? "");
+    setAllowedLongitude(currentClass?.allowedLongitude?.toString() ?? "");
+    setAllowedRadius(currentClass?.allowedRadius?.toString() ?? "");
+  }, [currentClass]);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +142,30 @@ export default function Classes() {
 
     void loadDetectedIp();
 
+    if (typeof window !== "undefined" && "geolocation" in navigator) {
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          if (!cancelled) {
+            setDetectedLocation({
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy,
+            });
+          }
+        },
+        null,
+        { 
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0 
+        },
+      );
+      return () => {
+        cancelled = true;
+        navigator.geolocation.clearWatch(watchId);
+      };
+    }
+
     return () => {
       cancelled = true;
     };
@@ -136,6 +180,14 @@ export default function Classes() {
 
   const unmatchedStudentMarks = latestSession?.unmatchedStudentMarks ?? [];
   const summaryStrip = useMemo(() => {
+    const uploadedRowsCount =
+      latestSession?.session.uploadedCount ??
+      (currentClass && currentClass.uploadedCount > 0 ? currentClass.uploadedCount : null) ??
+      (uploadHistory[0]?.uploadCount ?? null);
+
+    const uploadedCountValue = (uploadedRowsCount ?? 0).toLocaleString();
+    const uploadedCountLabel = "Excel Rows Uploaded";
+
     return [
       {
         label: "Tracked Classes",
@@ -150,8 +202,8 @@ export default function Classes() {
         color: "text-success bg-success/15",
       },
       {
-        label: "Expected Students",
-        value: classes.reduce((sum, item) => sum + item.expectedStudents, 0).toLocaleString(),
+        label: uploadedCountLabel,
+        value: uploadedCountValue,
         icon: Users,
         color: "text-blue-400 bg-blue-400/15",
       },
@@ -167,7 +219,7 @@ export default function Classes() {
         color: "text-warning bg-warning/15",
       },
     ];
-  }, [classes]);
+  }, [classes, currentClass, latestSession, uploadHistory]);
 
   const importMutation = useMutation({
     mutationFn: async () => {
@@ -238,31 +290,28 @@ export default function Classes() {
   const networkMutation = useMutation({
     mutationFn: async () => {
       if (!selectedClassId) {
-        throw new Error("Choose a class before saving Wi-Fi credentials.");
+        throw new Error("Choose a class before saving network rules.");
       }
 
-      if (!allowedWifiName.trim() && allowedWifiPublicIp.trim()) {
-        throw new Error("Add the Wi-Fi name first. Public IP is optional, but it cannot be saved alone.");
-      }
-
-      return updateClassNetworkCredentials(selectedClassId, {
-        allowedWifiName,
+      return updateClassGateways(selectedClassId, {
+        allowedWifiName: null,
         allowedWifiPublicIp,
+        allowedLatitude: allowedLatitude ? parseFloat(allowedLatitude) : null,
+        allowedLongitude: allowedLongitude ? parseFloat(allowedLongitude) : null,
+        allowedRadius: allowedRadius ? parseInt(allowedRadius) : null,
       });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["classes"] });
       await queryClient.invalidateQueries({ queryKey: ["classes", "latest-session", selectedClassId] });
       toast({
-        title: "Wi-Fi rule saved",
-        description: allowedWifiPublicIp.trim()
-          ? "Students will need the matching Wi-Fi name and public IP for this class."
-          : "Students will need the matching Wi-Fi name for this class.",
+        title: "Gateways updated",
+        description: "Class boundary rules (IP/GPS) have been successfully authorized.",
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Unable to save Wi-Fi rule",
+        title: "Unable to save boundary rules",
         description: error.message,
         variant: "destructive",
       });
@@ -281,6 +330,58 @@ export default function Classes() {
     onError: (error: Error) => {
       toast({
         title: "Unable to reset device binding",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteHistoryItemMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      setDeletingHistoryId(sessionId);
+      await deleteUploadedWorkbook(sessionId);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["classes"] });
+      await queryClient.invalidateQueries({ queryKey: ["classes", "latest-session", selectedClassId] });
+      await queryClient.invalidateQueries({ queryKey: ["classes", "upload-history", selectedClassId] });
+      toast({
+        title: "Upload removed",
+        description: "The selected Excel upload has been cleared from this class.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Unable to remove upload",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setDeletingHistoryId(null);
+    },
+  });
+
+  const clearHistoryMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedClassId) {
+        throw new Error("Choose a class before clearing upload history.");
+      }
+
+      await clearClassUploadHistory(selectedClassId);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["classes"] });
+      await queryClient.invalidateQueries({ queryKey: ["classes", "latest-session", selectedClassId] });
+      await queryClient.invalidateQueries({ queryKey: ["classes", "upload-history", selectedClassId] });
+      toast({
+        title: "Upload history cleared",
+        description: "All previously uploaded Excel files for this class have been removed.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Unable to clear history",
         description: error.message,
         variant: "destructive",
       });
@@ -462,18 +563,7 @@ export default function Classes() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 group/wifi">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                          <Wifi className="w-3.5 h-3.5" />
-                        </div>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-60">Wi-Fi rule</span>
-                      </div>
-                      <div className="text-sm font-bold text-foreground break-all group-hover:text-primary transition-colors">
-                        {currentClass?.allowedWifiName ?? "None"}
-                      </div>
-                    </div>
+                  <div className="grid grid-cols-1 gap-3">
                     <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 group/ip">
                       <div className="flex items-center gap-2 mb-2">
                         <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400">
@@ -575,6 +665,86 @@ export default function Classes() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.22 }}
+          className="dark-card rounded-[2rem] overflow-hidden"
+        >
+          <div className="p-5 border-b border-card-border flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">Previously Uploaded Excel Files</h3>
+              <p className="text-sm text-muted-foreground">
+                {currentClass
+                  ? `Workbook history for ${currentClass.code} ${currentClass.name}.`
+                  : "Select a class to view its earlier uploaded punch sheets."}
+              </p>
+            </div>
+            {currentClass && (
+              <div className="flex items-center gap-3">
+                <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
+                  {uploadHistory.length} uploads
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      uploadHistory.length > 0 &&
+                      window.confirm(
+                        `Clear all uploaded Excel files for ${currentClass.code}? This cannot be undone.`,
+                      )
+                    ) {
+                      clearHistoryMutation.mutate();
+                    }
+                  }}
+                  disabled={uploadHistory.length === 0 || clearHistoryMutation.isPending}
+                  className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-2 text-xs font-bold text-destructive transition-colors hover:bg-destructive hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {clearHistoryMutation.isPending ? "Clearing..." : "Clear History"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {!currentClass ? (
+            <div className="px-6 py-12 text-center text-sm text-muted-foreground">
+              Choose a class to see its uploaded Excel file history.
+            </div>
+          ) : isUploadHistoryLoading ? (
+            <div className="p-6 space-y-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="h-20 rounded-2xl bg-white/[0.02] border border-white/5 animate-pulse"
+                />
+              ))}
+            </div>
+          ) : uploadHistory.length === 0 ? (
+            <div className="px-6 py-12 text-center text-sm text-muted-foreground">
+              No Excel files have been uploaded for this class yet.
+            </div>
+          ) : (
+            <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {uploadHistory.map((item) => (
+                <UploadHistoryCard
+                  key={item.id}
+                  item={item}
+                  isDeleting={deleteHistoryItemMutation.isPending && deletingHistoryId === item.id}
+                  onDelete={() => {
+                    if (
+                      window.confirm(
+                        `Delete ${item.sourceFileName} from ${item.sessionDate}? This will remove the uploaded sheet, roster rows, and student marks for that session.`,
+                      )
+                    ) {
+                      deleteHistoryItemMutation.mutate(item.id);
+                    }
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.18 }}
           className="dark-card relative overflow-hidden rounded-[2rem] p-6 group"
         >
@@ -611,18 +781,6 @@ export default function Classes() {
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1 text-primary">
-                    Mandatory Wi-Fi Name
-                  </span>
-                  <input
-                    value={allowedWifiName}
-                    onChange={(event) => setAllowedWifiName(event.target.value)}
-                    className="w-full rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-white/[0.05] transition-all"
-                    placeholder="e.g. Campus-Secure-5G"
-                  />
-                </div>
-
-                <div className="space-y-2">
                   <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
                     Public IP Lock <span className="text-muted-foreground/40 lowercase font-medium ml-1">(Optional)</span>
                   </span>
@@ -631,6 +789,62 @@ export default function Classes() {
                     onChange={(event) => setAllowedWifiPublicIp(event.target.value)}
                     className="w-full rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-white/[0.05] transition-all"
                     placeholder="e.g. 103.45.12.1"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
+                      Latitude
+                    </span>
+                    <div className="relative">
+                      <input
+                        value={allowedLatitude}
+                        onChange={(event) => setAllowedLatitude(event.target.value)}
+                        className="w-full rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md pl-4 pr-10 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-white/[0.05] transition-all"
+                        placeholder="e.g. 19.076"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (navigator.geolocation) {
+                            setLocationLoading(true);
+                            navigator.geolocation.getCurrentPosition((pos) => {
+                              setAllowedLatitude(pos.coords.latitude.toString());
+                              setAllowedLongitude(pos.coords.longitude.toString());
+                              setLocationLoading(false);
+                            }, () => setLocationLoading(false));
+                          }
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-primary hover:text-primary-foreground"
+                      >
+                        <MapPin className={cn("w-4 h-4", locationLoading && "animate-ping")} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
+                      Longitude
+                    </span>
+                    <input
+                      value={allowedLongitude}
+                      onChange={(event) => setAllowedLongitude(event.target.value)}
+                      className="w-full rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-white/[0.05] transition-all"
+                      placeholder="e.g. 72.877"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
+                    Allowed Radius <span className="text-muted-foreground/40 lowercase font-medium ml-1">(Meters)</span>
+                  </span>
+                  <input
+                    type="number"
+                    value={allowedRadius}
+                    onChange={(event) => setAllowedRadius(event.target.value)}
+                    className="w-full rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-white/[0.05] transition-all"
+                    placeholder="e.g. 50"
                   />
                 </div>
 
@@ -644,8 +858,10 @@ export default function Classes() {
                   </button>
                   <button
                     onClick={() => {
-                      setAllowedWifiName("");
                       setAllowedWifiPublicIp("");
+                      setAllowedLatitude("");
+                      setAllowedLongitude("");
+                      setAllowedRadius("");
                     }}
                     type="button"
                     className="px-6 py-4 rounded-2xl bg-white/5 border border-white/5 text-sm font-bold text-foreground hover:bg-white/10 transition-colors"
@@ -682,13 +898,46 @@ export default function Classes() {
                       </div>
                     </div>
 
+                    <div className="p-4 rounded-2xl bg-black/20 border border-white/5 group/loc-helper">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-60">My Current Location</div>
+                        {detectedLocation?.accuracy && (
+                          <div className={cn(
+                            "text-[8px] font-black uppercase px-2 py-0.5 rounded-full",
+                            detectedLocation.accuracy < 20 ? "bg-success/20 text-success" : "bg-warning/20 text-warning"
+                          )}>
+                             Accurate to {detectedLocation.accuracy.toFixed(0)}m
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-mono text-foreground font-bold truncate">
+                          {detectedLocation ? `${detectedLocation.lat.toFixed(6)}, ${detectedLocation.lng.toFixed(6)}` : "Fetching GPS..."}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (detectedLocation) {
+                              setAllowedLatitude(detectedLocation.lat.toString());
+                              setAllowedLongitude(detectedLocation.lng.toString());
+                              if (!allowedRadius) setAllowedRadius("100");
+                            }
+                          }}
+                          disabled={!detectedLocation}
+                          className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] font-bold text-primary uppercase tracking-wider hover:bg-primary hover:text-white transition-all disabled:opacity-30"
+                        >
+                          Auto-Fill
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10">
                       <div className="flex items-center gap-2 mb-2">
                         <Clock className="w-3.5 h-3.5 text-blue-400" />
                         <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400">Match Logic</span>
                       </div>
                       <p className="text-[11px] leading-relaxed text-muted-foreground">
-                        Students must be connected to the specified Wi-Fi. If IP lock is set, their public gateway must also match.
+                        If boundary rules are set, students can mark attendance only when their **Public IP** matches and they are within the **GPS Radius** of the classroom.
                       </p>
                     </div>
                   </div>
@@ -963,11 +1212,91 @@ function SessionOverview({ session }: { session: SessionPayload }) {
           <div className="col-span-2">
             <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-40 mb-1">Active Gateway</div>
             <div className="text-xs font-mono text-primary font-bold truncate">
-              {session.session.allowedWifiName || "Unlimited Access"}
+              {session.session.allowedWifiPublicIp || "Open access"}
             </div>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function UploadHistoryCard({
+  item,
+  isDeleting,
+  onDelete,
+}: {
+  item: UploadedWorkbookHistoryItem;
+  isDeleting: boolean;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5 hover:bg-white/[0.045] transition-colors">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20">
+              <FileSpreadsheet className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-bold text-foreground truncate">{item.sourceFileName}</div>
+              <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mt-1 opacity-60">
+                Uploaded {new Date(item.importedAt).toLocaleString()}
+              </div>
+            </div>
+          </div>
+        </div>
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider",
+            item.reviewStatus === "finalized"
+              ? "bg-success/15 text-success"
+              : item.reviewStatus === "recheck_pending"
+                ? "bg-warning/15 text-warning"
+                : "bg-white/10 text-muted-foreground",
+          )}
+        >
+          {item.reviewStatus.replace(/_/g, " ")}
+        </span>
+      </div>
+
+      <div className="mt-5 grid grid-cols-3 gap-3">
+        <HistoryMetric label="Session Date" value={item.sessionDate} />
+        <HistoryMetric label="Imported Rows" value={item.uploadCount} />
+        <HistoryMetric
+          label="Last Updated"
+          value={new Date(item.updatedAt).toLocaleDateString()}
+        />
+      </div>
+
+      <div className="mt-4 flex justify-end">
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={isDeleting}
+          className="inline-flex items-center gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-2 text-xs font-bold text-destructive transition-colors hover:bg-destructive hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          {isDeleting ? "Removing..." : "Remove Upload"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function HistoryMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="rounded-2xl bg-black/20 border border-white/5 px-4 py-3">
+      <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-60">
+        {label}
+      </div>
+      <div className="mt-2 text-sm font-bold text-foreground break-words">{value}</div>
     </div>
   );
 }
@@ -1047,7 +1376,7 @@ function ClassCard({
               <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-40">Boundary Rule</div>
             </div>
             <div className="text-xs font-bold text-foreground truncate">
-              {classItem.allowedWifiName || "Public Network Access"}
+              {classItem.allowedWifiPublicIp || "Open Network Access"}
             </div>
           </div>
 
