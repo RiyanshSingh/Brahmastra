@@ -9,6 +9,7 @@ import {
   saveSessionRecheck,
   studentMarkSchema,
   submitStudentMark,
+  deleteClass,
 } from "../lib/attendance";
 import type { RouteDefinition } from "../lib/http";
 
@@ -63,6 +64,14 @@ const classesRoutes: RouteDefinition[] = [
       const payload = studentMarkSchema.parse(req.body);
       const data = await submitStudentMark(req.params.sessionId ?? "", payload);
       res.json(data);
+    },
+  },
+  {
+    method: "DELETE",
+    path: "/classes/:classId",
+    handler: async (req, res) => {
+      await deleteClass(req.params.classId ?? "");
+      res.json({ success: true });
     },
   },
 ];

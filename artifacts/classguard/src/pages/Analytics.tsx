@@ -65,9 +65,9 @@ export default function Analytics() {
                         className={cn(
                           "p-2.5 rounded-xl",
                           kpi.tone === "primary" && "text-primary bg-primary/15",
-                          kpi.tone === "warning" && "text-warning bg-warning/15",
+                          kpi.tone === "warning" && "text-[#92400e] dark:text-warning bg-warning/15",
                           kpi.tone === "destructive" && "text-destructive bg-destructive/15",
-                          kpi.tone === "success" && "text-success bg-success/15",
+                          kpi.tone === "success" && "text-[#15803d] dark:text-success bg-success/15",
                         )}
                       >
                         <Icon className="w-4 h-4" />
@@ -75,7 +75,7 @@ export default function Analytics() {
                       <span
                         className={cn(
                           "text-xs font-semibold flex items-center gap-1",
-                          kpi.up ? "text-success" : "text-destructive",
+                          kpi.up ? "text-[#15803d] dark:text-success" : "text-destructive",
                         )}
                       >
                         {kpi.up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
@@ -192,7 +192,7 @@ export default function Analytics() {
                 <div key={item.name} className="space-y-1.5">
                   <div className="flex justify-between text-sm">
                     <span className="font-medium text-foreground">{item.name}</span>
-                    <span className={cn("font-bold", item.rate >= 90 ? "text-success" : item.rate >= 75 ? "text-primary" : "text-warning")}>
+                    <span className={cn("font-bold", item.rate >= 90 ? "text-[#15803d] dark:text-success" : item.rate >= 75 ? "text-primary" : "text-[#92400e] dark:text-warning")}>
                       {item.rate}%
                     </span>
                   </div>
@@ -250,11 +250,11 @@ export default function Analytics() {
                         <div className="h-1.5 w-20 bg-muted rounded-full overflow-hidden">
                           <div className="h-full bg-warning rounded-full" style={{ width: `${student.rate}%` }} />
                         </div>
-                        <span className="text-xs font-bold text-warning">{student.rate}%</span>
+                        <span className="text-xs font-bold text-[#92400e] dark:text-warning">{student.rate}%</span>
                       </div>
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className={cn("flex items-center gap-1 text-xs font-semibold", student.trend === "up" ? "text-success" : "text-destructive")}>
+                      <span className={cn("flex items-center gap-1 text-xs font-semibold", student.trend === "up" ? "text-[#15803d] dark:text-success" : "text-destructive")}>
                         {student.trend === "up" ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                         {student.trend === "up" ? "Improving" : "Declining"}
                       </span>

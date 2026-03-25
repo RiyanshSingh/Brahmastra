@@ -2,24 +2,30 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
+  ArrowRight,
   BookOpen,
   Calendar,
   CheckCircle2,
+  ChevronRight,
   Clock,
   FileSpreadsheet,
+  HelpCircle,
+  Map as MapIcon,
   MapPin,
+  MessageSquare,
   Play,
+  Plus,
+  PlusCircle,
   Search,
   ShieldCheck,
   Trash2,
   Upload,
   Users,
   Wifi,
-  XCircle,
-  HelpCircle,
-  Plus,
   X,
+  XCircle,
 } from "lucide-react";
+import { MapPicker } from "@/components/dashboard/MapPicker";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { cn } from "@/lib/utils";
 import {
@@ -32,12 +38,33 @@ import {
   updateClassQuizEnabled,
   upsertQuiz,
   fetchQuiz,
+  createNewClass,
+  deleteClass,
   type AttendanceStatus,
   type ClassSummary,
   type SessionPayload,
   type UploadedWorkbookHistoryItem,
   type QuizQuestion,
 } from "@/lib/api";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { getStatusLabel, parsePunchWorkbook } from "@/lib/attendance";
 import { fetchPublicIp } from "@/lib/student-auth";
 import {
@@ -56,8 +83,8 @@ const STATUS_OPTIONS: AttendanceStatus[] = [
 ];
 
 const CLASS_STATUS_CONFIG = {
-  active: { label: "Recheck active", dot: "bg-success", text: "text-success bg-success/15" },
-  scheduled: { label: "Waiting for upload", dot: "bg-warning", text: "text-warning bg-warning/15" },
+  active: { label: "Recheck active", dot: "bg-success", text: "text-[#15803d] dark:text-success bg-success/15" },
+  scheduled: { label: "Waiting for upload", dot: "bg-warning", text: "text-[#92400e] dark:text-warning bg-warning/15" },
   ended: { label: "Reviewed", dot: "bg-muted-foreground", text: "text-muted-foreground bg-muted" },
 } as const;
 
@@ -95,6 +122,9 @@ export default function Classes() {
   } = useClassUploadHistoryData(selectedClassId || null);
   const [draftStatuses, setDraftStatuses] = useState<Record<string, AttendanceStatus>>({});
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
+  const [isCreateClassOpen, setIsCreateClassOpen] = useState(false);
+  const [newClassCode, setNewClassCode] = useState("");
+  const [newClassName, setNewClassName] = useState("");
   const currentClass = classes.find((item) => item.id === selectedClassId) ?? null;
 
   useEffect(() => {
@@ -218,7 +248,7 @@ export default function Classes() {
         label: "Recheck Active",
         value: classes.filter((item) => item.status === "active").length,
         icon: Play,
-        color: "text-success bg-success/15",
+        color: "text-[#15803d] dark:text-success bg-success/15",
       },
       {
         label: uploadedCountLabel,
@@ -235,7 +265,7 @@ export default function Classes() {
               classes.reduce((sum, item) => sum + item.attendanceRate, 0) / classes.length,
             )}%`,
         icon: CheckCircle2,
-        color: "text-warning bg-warning/15",
+        color: "text-[#92400e] dark:text-warning bg-warning/15",
       },
     ];
   }, [classes, currentClass, latestSession, uploadHistory]);
@@ -413,8 +443,53 @@ export default function Classes() {
     },
   });
 
+  const createClassMutation = useMutation({
+    mutationFn: async () => {
+      if (!newClassCode.trim() || !newClassName.trim()) {
+        throw new Error("Both Class Code and Name are required.");
+      }
+      return createNewClass({ code: newClassCode, name: newClassName });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["classes"] });
+      setIsCreateClassOpen(false);
+      setNewClassCode("");
+      setNewClassName("");
+      toast({
+        title: "Class Created",
+        description: "Your new classroom has been successfully initialized in the system.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Creation failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteClassMutation = useMutation({
+    mutationFn: async (classId: string) => deleteClass(classId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["classes"] });
+      setSelectedClassId("");
+      toast({
+        title: "Class Deleted",
+        description: "The course and its associated records have been wiped.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Deletion failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   return (
-    <AppLayout title="Attendance Classes">
+    <>
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {summaryStrip.map((item, index) => (
@@ -424,7 +499,7 @@ export default function Classes() {
               animate={{ opacity: 1, y: 0 }}
               whileHover={{ y: -4, scale: 1.02 }}
               transition={{ duration: 0.35, delay: index * 0.06 }}
-              className="dark-card backdrop-blur-xl border border-white/5 rounded-[1.5rem] p-5 flex items-center gap-4 group transition-all duration-300 hover:shadow-2xl hover:shadow-black/20"
+              className="dark-card backdrop-blur-xl border border-border rounded-[1.5rem] p-5 flex items-center gap-4 group transition-all duration-300 hover:shadow-2xl hover:shadow-black/20"
             >
               <div className={cn("p-3 rounded-2xl relative overflow-hidden", item.color)}>
                 <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl" />
@@ -461,29 +536,54 @@ export default function Classes() {
             </div>
 
             <div className="relative z-10 space-y-5">
-              <div className="space-y-2">
-                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
-                  Target Class
-                </span>
-                <select
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
+                    Target Class
+                  </span>
+                  <div className="flex items-center gap-4">
+                    {currentClass && (
+                      <button 
+                         onClick={() => {
+                           if (window.confirm(`Permanently delete ${currentClass.code}? All history will be lost.`)) {
+                             deleteClassMutation.mutate(currentClass.id);
+                           }
+                         }}
+                         className="text-[10px] font-bold text-destructive hover:underline uppercase tracking-widest flex items-center gap-1 transition-all"
+                      >
+                         <Trash2 className="w-3 h-3" />
+                         Delete Course
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => setIsCreateClassOpen(true)}
+                      className="text-[10px] font-bold text-primary hover:underline uppercase tracking-widest flex items-center gap-1 transition-all"
+                    >
+                      <PlusCircle className="w-3 h-3" />
+                      New Class
+                    </button>
+                  </div>
+                </div>
+                <Select
                   value={selectedClassId}
-                  onChange={(event) => setSelectedClassId(event.target.value)}
-                  className="w-full rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-white/[0.05] transition-all"
+                  onValueChange={setSelectedClassId}
                 >
-                  <option value="">Select a class</option>
-                  {classes.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.code} • {item.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <SelectTrigger className="w-full h-14 rounded-2xl border border-border bg-muted/20 backdrop-blur-md px-4 text-sm text-foreground focus:ring-primary/40 focus:bg-muted/30 transition-all">
+                    <SelectValue placeholder="Select a class" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl border border-border bg-card">
+                    {classes.map((item) => (
+                      <SelectItem key={item.id} value={item.id} className="rounded-xl focus:bg-primary">
+                        {item.code} • {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
               <div className="space-y-2">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
                   Session Date
                 </span>
-                <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-3.5 focus-within:border-primary/40 focus-within:bg-white/[0.05] transition-all">
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 backdrop-blur-md px-4 py-3.5 focus-within:border-primary/40 focus-within:bg-muted/30 transition-all">
                   <Calendar className="w-4 h-4 text-primary/60" />
                   <input
                     type="date"
@@ -501,7 +601,7 @@ export default function Classes() {
                 <input
                   value={reviewerName}
                   onChange={(event) => setReviewerName(event.target.value)}
-                  className="w-full rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-white/[0.05] transition-all"
+                  className="w-full rounded-2xl border border-border bg-muted/20 backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-muted/30 transition-all"
                   placeholder="Enter name"
                 />
               </div>
@@ -510,7 +610,7 @@ export default function Classes() {
                 <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
                   Excel Workbook
                 </span>
-                <label className="flex cursor-pointer items-center gap-4 rounded-2xl border-2 border-dashed border-white/5 bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-primary/30 transition-all group/upload">
+                <label className="flex cursor-pointer items-center gap-4 rounded-2xl border-2 border-dashed border-border bg-muted/10 p-5 hover:bg-muted/20 hover:border-primary/30 transition-all group/upload">
                   <div className="p-3 rounded-xl bg-primary/10 text-primary group-hover/upload:scale-110 transition-transform">
                     <FileSpreadsheet className="w-6 h-6" />
                   </div>
@@ -559,8 +659,8 @@ export default function Classes() {
 
             <div className="relative z-10">
               {!latestSession ? (
-                <div className="rounded-[1.5rem] border-2 border-dashed border-white/5 bg-white/[0.02] px-6 py-12 text-center">
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
+                <div className="rounded-[1.5rem] border-2 border-dashed border-border bg-muted/10 px-6 py-12 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-muted/20 flex items-center justify-center mx-auto mb-4">
                     <Clock className="w-6 h-6 text-muted-foreground/40" />
                   </div>
                   <p className="text-sm text-foreground font-bold">Session required</p>
@@ -570,7 +670,7 @@ export default function Classes() {
                 </div>
               ) : (
                 <div className="space-y-5">
-                  <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 flex items-center justify-between">
+                  <div className="rounded-2xl border border-border bg-muted/20 p-4 flex items-center justify-between">
                     <div>
                       <div className="text-sm font-bold text-foreground">
                         {latestSession.session.classCode} • {latestSession.session.className}
@@ -581,12 +681,12 @@ export default function Classes() {
                     </div>
                     <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-success/10 border border-success/20">
                       <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                      <span className="text-[10px] font-bold text-success uppercase tracking-wider">Active</span>
+                      <span className="text-[10px] font-bold text-[#15803d] dark:text-success uppercase tracking-wider">Active</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-3">
-                    <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 group/ip">
+                    <div className="rounded-2xl border border-border bg-muted/20 p-4 group/ip">
                       <div className="flex items-center gap-2 mb-2">
                         <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400">
                           <ShieldCheck className="w-3.5 h-3.5" />
@@ -599,9 +699,9 @@ export default function Classes() {
                     </div>
                   </div>
 
-                  <div className="rounded-[1.5rem] border border-white/10 bg-gradient-to-br from-white/[0.05] to-transparent p-5">
+                  <div className="rounded-[1.5rem] border border-border bg-gradient-to-br from-white/[0.05] to-transparent p-5">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500">
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 text-[#92400e] dark:text-amber-500">
                         <ShieldCheck className="w-5 h-5" />
                       </div>
                       <h4 className="text-sm font-bold text-foreground">Device Reset</h4>
@@ -612,26 +712,26 @@ export default function Classes() {
                         <input
                           value={resetEnrollmentNo}
                           onChange={(event) => setResetEnrollmentNo(event.target.value.toUpperCase())}
-                          className="w-full rounded-xl border border-white/5 bg-white/[0.03] pl-10 pr-4 py-3 text-sm text-foreground outline-none focus:border-amber-500/30 transition-all"
+                          className="w-full rounded-xl border border-border bg-muted/20 pl-10 pr-4 py-3 text-sm text-foreground outline-none focus:border-amber-500/30 transition-all"
                           placeholder="Enrollment #"
                         />
                       </div>
-                      <button
-                        onClick={() => resetDeviceMutation.mutate()}
-                        disabled={resetDeviceMutation.isPending || !resetEnrollmentNo.trim()}
-                        className="w-full rounded-xl bg-amber-500/10 border border-amber-500/20 py-3 text-xs font-bold text-amber-500 hover:bg-amber-500 hover:text-white transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed uppercase tracking-widest"
-                      >
+                        <button
+                          onClick={() => resetDeviceMutation.mutate()}
+                          disabled={resetDeviceMutation.isPending || !resetEnrollmentNo.trim()}
+                          className="w-full rounded-xl bg-amber-600 dark:bg-amber-500/10 border border-amber-600/20 py-3 text-xs font-bold text-white dark:text-amber-500 hover:bg-amber-700 dark:hover:bg-amber-500 dark:hover:text-white transition-all duration-300 shadow-lg shadow-amber-600/10 dark:shadow-none disabled:opacity-40 disabled:cursor-not-allowed uppercase tracking-widest"
+                        >
                         {resetDeviceMutation.isPending ? "Resetting..." : "Unlock Device Binding"}
                       </button>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-4 flex flex-col justify-between h-24">
+                    <div className="rounded-2xl bg-muted/10 border border-border p-4 flex flex-col justify-between h-24">
                       <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-60">Presence</div>
                       <div className="text-3xl font-black text-foreground">{latestSession.session.studentMarkedCount}</div>
                     </div>
-                    <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-4 flex flex-col justify-between h-24">
+                    <div className="rounded-2xl bg-muted/10 border border-border p-4 flex flex-col justify-between h-24">
                       <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-60">Verified</div>
                       <div className="text-3xl font-black text-primary">{latestSession.session.matchedCount}</div>
                     </div>
@@ -645,124 +745,84 @@ export default function Classes() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.2 }}
-            className="dark-card relative overflow-hidden rounded-[2rem] p-6 xl:col-span-4"
+            className="dark-card relative overflow-hidden rounded-[2rem] flex flex-col xl:col-span-4"
           >
             {/* Background Accent */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
 
-            <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 mb-6">
-              <div>
-                <h3 className="text-xl font-bold text-foreground tracking-tight">Active Analytics</h3>
-                <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                  Detailed comparison metrics.
-                </p>
+            <div className="p-6 border-b border-card-border overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+                <h3 className="text-xl font-bold text-foreground tracking-tight">Excel History</h3>
+                {currentClass && (
+                  <div className="px-2 py-0.5 rounded-full bg-muted/20 border border-border text-[9px] uppercase font-bold tracking-widest text-muted-foreground scale-95 origin-right">
+                    {uploadHistory.length} uploads
+                  </div>
+                )}
               </div>
-              {currentClass && (
-                <div className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
-                  {currentClass.code}
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold opacity-60">
+                {currentClass ? `History for ${currentClass.code}` : "Previously uploaded sheets"}
+              </p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto max-h-[520px] scrollbar-thin scrollbar-thumb-muted-foreground/10 hover:scrollbar-thumb-muted-foreground/20">
+              {!currentClass ? (
+                 <div className="p-10 text-center">
+                   <div className="w-12 h-12 rounded-2xl bg-muted/10 flex items-center justify-center mx-auto mb-4">
+                     <FileSpreadsheet className="w-6 h-6 text-muted-foreground/30" />
+                   </div>
+                   <p className="text-xs font-bold text-foreground opacity-60">Select a class first</p>
+                 </div>
+              ) : isUploadHistoryLoading ? (
+                <div className="p-5 space-y-3">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="h-20 rounded-2xl bg-muted/10 border border-border animate-pulse" />
+                  ))}
+                </div>
+              ) : uploadHistory.length === 0 ? (
+                <div className="p-10 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-muted/10 flex items-center justify-center mx-auto mb-4">
+                    <FileSpreadsheet className="w-6 h-6 text-muted-foreground/20" />
+                  </div>
+                  <p className="text-xs font-bold text-foreground opacity-40">No history found</p>
+                </div>
+              ) : (
+                <div className="p-4 space-y-3">
+                  {uploadHistory.map((item) => (
+                    <UploadHistoryCard
+                      key={item.id}
+                      item={item}
+                      compact
+                      isDeleting={deleteHistoryItemMutation.isPending && deletingHistoryId === item.id}
+                      onDelete={() => {
+                        if (window.confirm(`Delete ${item.sourceFileName}?`)) {
+                          deleteHistoryItemMutation.mutate(item.id);
+                        }
+                      }}
+                    />
+                  ))}
                 </div>
               )}
             </div>
 
-            <div className="relative z-10">
-              {isSessionLoading ? (
-                <div className="h-[400px] rounded-[1.5rem] bg-white/[0.02] animate-pulse border border-white/5" />
-              ) : latestSession ? (
-                <SessionOverview session={latestSession} />
-              ) : (
-                <div className="rounded-[1.5rem] border-2 border-dashed border-white/5 bg-white/[0.02] px-6 py-16 text-center">
-                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
-                    <FileSpreadsheet className="w-8 h-8 text-muted-foreground/30" />
-                  </div>
-                  <p className="text-sm font-bold text-foreground">Awaiting Data</p>
-                  <p className="text-xs text-muted-foreground mt-1 max-w-[220px] mx-auto">
-                    Complete the punch import to unlock deep analytics for this class.
-                  </p>
-                </div>
-              )}
-            </div>
+            {currentClass && uploadHistory.length > 0 && (
+              <div className="p-4 bg-muted/5 border-t border-card-border">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Clear all?`)) {
+                        clearHistoryMutation.mutate();
+                      }
+                    }}
+                    disabled={clearHistoryMutation.isPending}
+                    className="w-full rounded-xl border border-destructive/20 bg-destructive/10 py-2.5 text-[10px] font-black uppercase tracking-widest text-destructive transition-all hover:bg-destructive hover:text-white disabled:opacity-40"
+                  >
+                    {clearHistoryMutation.isPending ? "Clearing..." : "Clear Upload History"}
+                  </button>
+              </div>
+            )}
           </motion.div>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.22 }}
-          className="dark-card rounded-[2rem] overflow-hidden"
-        >
-          <div className="p-5 border-b border-card-border flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">Previously Uploaded Excel Files</h3>
-              <p className="text-sm text-muted-foreground">
-                {currentClass
-                  ? `Workbook history for ${currentClass.code} ${currentClass.name}.`
-                  : "Select a class to view its earlier uploaded punch sheets."}
-              </p>
-            </div>
-            {currentClass && (
-              <div className="flex items-center gap-3">
-                <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
-                  {uploadHistory.length} uploads
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (
-                      uploadHistory.length > 0 &&
-                      window.confirm(
-                        `Clear all uploaded Excel files for ${currentClass.code}? This cannot be undone.`,
-                      )
-                    ) {
-                      clearHistoryMutation.mutate();
-                    }
-                  }}
-                  disabled={uploadHistory.length === 0 || clearHistoryMutation.isPending}
-                  className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-2 text-xs font-bold text-destructive transition-colors hover:bg-destructive hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {clearHistoryMutation.isPending ? "Clearing..." : "Clear History"}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {!currentClass ? (
-            <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-              Choose a class to see its uploaded Excel file history.
-            </div>
-          ) : isUploadHistoryLoading ? (
-            <div className="p-6 space-y-3">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="h-20 rounded-2xl bg-white/[0.02] border border-white/5 animate-pulse"
-                />
-              ))}
-            </div>
-          ) : uploadHistory.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-              No Excel files have been uploaded for this class yet.
-            </div>
-          ) : (
-            <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {uploadHistory.map((item) => (
-                <UploadHistoryCard
-                  key={item.id}
-                  item={item}
-                  isDeleting={deleteHistoryItemMutation.isPending && deletingHistoryId === item.id}
-                  onDelete={() => {
-                    if (
-                      window.confirm(
-                        `Delete ${item.sourceFileName} from ${item.sessionDate}? This will remove the uploaded sheet, roster rows, and student marks for that session.`,
-                      )
-                    ) {
-                      deleteHistoryItemMutation.mutate(item.id);
-                    }
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -786,14 +846,14 @@ export default function Classes() {
               </div>
             </div>
             {currentClass && (
-              <span className="px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase font-black tracking-[0.1em] text-muted-foreground">
+              <span className="px-4 py-1.5 rounded-full bg-muted/20 border border-border text-[10px] uppercase font-black tracking-[0.1em] text-muted-foreground">
                 {currentClass.code} System Configuration
               </span>
             )}
           </div>
 
           {!currentClass ? (
-            <div className="rounded-[1.5rem] border-2 border-dashed border-white/5 bg-white/[0.02] px-6 py-12 text-center">
+            <div className="rounded-[1.5rem] border-2 border-dashed border-border bg-muted/10 px-6 py-12 text-center">
               <p className="text-sm font-bold text-foreground">Select a class first</p>
               <p className="mt-1 text-xs text-muted-foreground opacity-60">
                 Configure your network boundary to prevent remote proxy markers.
@@ -802,6 +862,26 @@ export default function Classes() {
           ) : (
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="space-y-6">
+                 <div className="space-y-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
+                      Visual Coordinates Pick
+                    </span>
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[9px] font-bold text-primary uppercase">
+                      <MapIcon className="w-2.5 h-2.5" /> Interactive Map
+                    </div>
+                  </div>
+                  <MapPicker 
+                    lat={allowedLatitude ? parseFloat(allowedLatitude) : null}
+                    lng={allowedLongitude ? parseFloat(allowedLongitude) : null}
+                    radius={parseInt(allowedRadius) || 100}
+                    onChange={(lat, lng) => {
+                      setAllowedLatitude(lat.toString());
+                      setAllowedLongitude(lng.toString());
+                    }}
+                  />
+                </div>
+
                 <div className="space-y-2">
                   <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
                     Public IP Lock <span className="text-muted-foreground/40 lowercase font-medium ml-1">(Optional)</span>
@@ -809,12 +889,12 @@ export default function Classes() {
                   <input
                     value={allowedWifiPublicIp}
                     onChange={(event) => setAllowedWifiPublicIp(event.target.value)}
-                    className="w-full rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-white/[0.05] transition-all"
+                    className="w-full rounded-2xl border border-border bg-muted/20 backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-muted/30 transition-all"
                     placeholder="e.g. 103.45.12.1"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
                       Latitude
@@ -823,7 +903,7 @@ export default function Classes() {
                       <input
                         value={allowedLatitude}
                         onChange={(event) => setAllowedLatitude(event.target.value)}
-                        className="w-full rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md pl-4 pr-10 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-white/[0.05] transition-all"
+                        className="w-full rounded-2xl border border-border bg-muted/20 backdrop-blur-md pl-4 pr-10 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-muted/30 transition-all"
                         placeholder="e.g. 19.076"
                       />
                       <button
@@ -851,13 +931,24 @@ export default function Classes() {
                     <input
                       value={allowedLongitude}
                       onChange={(event) => setAllowedLongitude(event.target.value)}
-                      className="w-full rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-white/[0.05] transition-all"
+                      className="w-full rounded-2xl border border-border bg-muted/20 backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-muted/30 transition-all"
                       placeholder="e.g. 72.877"
+                    />
+                  </div>
+                  <div className="space-y-2 text-primary">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-primary font-bold ml-1">
+                      Radius (meters)
+                    </span>
+                    <input
+                      value={allowedRadius}
+                      onChange={(event) => setAllowedRadius(event.target.value)}
+                      className="w-full rounded-2xl border border-primary/20 bg-primary/5 backdrop-blur-md px-4 py-3.5 text-sm font-bold text-primary outline-none focus:border-primary/40 focus:bg-primary/10 transition-all"
+                      placeholder="e.g. 100"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-4 pt-4 border-t border-white/10">
+                <div className="space-y-4 pt-4 border-t border-border">
                   <div className="flex items-center justify-between p-4 rounded-2xl bg-primary/5 border border-primary/10 transition-all">
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-xl bg-primary/10 text-primary">
@@ -873,7 +964,7 @@ export default function Classes() {
                       onClick={() => setQuizEnabled(!quizEnabled)}
                       className={cn(
                         "relative w-11 h-6 rounded-full transition-colors duration-200 outline-none",
-                        quizEnabled ? "bg-primary" : "bg-white/10"
+                        quizEnabled ? "bg-primary" : "bg-muted/30"
                       )}
                     >
                       <div className={cn(
@@ -902,7 +993,7 @@ export default function Classes() {
 
                       <div className="space-y-4">
                         {quizQuestions.map((q, qIdx) => (
-                          <div key={qIdx} className="p-5 rounded-2xl bg-white/5 border border-white/5 space-y-4 relative group/q animate-in zoom-in-95 duration-300">
+                          <div key={qIdx} className="p-5 rounded-2xl bg-muted/20 border border-border space-y-4 relative group/q animate-in zoom-in-95 duration-300">
                             <button
                               type="button"
                               onClick={() => setQuizQuestions(quizQuestions.filter((_, i) => i !== qIdx))}
@@ -931,7 +1022,7 @@ export default function Classes() {
                                   key={oIdx} 
                                   className={cn(
                                     "flex items-center gap-3 p-3 rounded-xl border transition-all",
-                                    q.correct_option_index === oIdx ? "bg-primary/10 border-primary/30" : "bg-black/20 border-white/5"
+                                    q.correct_option_index === oIdx ? "bg-primary/10 border-primary/30" : "bg-black/20 border-border"
                                   )}
                                 >
                                   <button
@@ -943,7 +1034,7 @@ export default function Classes() {
                                     }}
                                     className={cn(
                                       "shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
-                                      q.correct_option_index === oIdx ? "bg-primary border-primary" : "bg-transparent border-white/20"
+                                      q.correct_option_index === oIdx ? "bg-primary border-primary" : "bg-transparent border-border/40"
                                     )}
                                   >
                                     {q.correct_option_index === oIdx && <div className="w-2 h-2 rounded-full bg-white" />}
@@ -986,7 +1077,7 @@ export default function Classes() {
                       setAllowedRadius("");
                     }}
                     type="button"
-                    className="px-6 py-4 rounded-2xl bg-white/5 border border-white/5 text-sm font-bold text-foreground hover:bg-white/10 transition-colors"
+                    className="px-6 py-4 rounded-2xl bg-muted/20 border border-border text-sm font-bold text-foreground hover:bg-muted/30 transition-colors"
                   >
                     Clear
                   </button>
@@ -994,16 +1085,16 @@ export default function Classes() {
               </div>
 
               <div className="space-y-6">
-                <div className="rounded-[1.5rem] bg-gradient-to-br from-white/[0.05] to-transparent border border-white/10 p-6">
+                <div className="rounded-[1.5rem] bg-gradient-to-br from-white/[0.05] to-transparent border border-border p-6">
                   <div className="flex items-center gap-3 mb-5">
-                    <div className="p-2 rounded-lg bg-success/10 text-success">
+                    <div className="p-2 rounded-lg bg-success/10 text-[#15803d] dark:text-success">
                       <ShieldCheck className="w-5 h-5" />
                     </div>
                     <span className="text-sm font-bold text-foreground tracking-tight">Active Sensor Feedback</span>
                   </div>
 
                   <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-black/20 border border-white/5 group/ip-helper">
+                    <div className="p-4 rounded-2xl bg-black/20 border border-border group/ip-helper">
                       <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-60 mb-2">My Network IP</div>
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-sm font-mono text-foreground font-bold truncate">
@@ -1013,20 +1104,20 @@ export default function Classes() {
                           type="button"
                           onClick={() => detectedPublicIp && setAllowedWifiPublicIp(detectedPublicIp)}
                           disabled={!detectedPublicIp}
-                          className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] font-bold text-primary uppercase tracking-wider hover:bg-primary hover:text-white transition-all disabled:opacity-30"
+                          className="px-3 py-1.5 rounded-lg bg-muted/20 border border-border text-[10px] font-bold text-primary uppercase tracking-wider hover:bg-primary hover:text-white transition-all disabled:opacity-30"
                         >
                           Auto-Fill
                         </button>
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-black/20 border border-white/5 group/loc-helper">
+                    <div className="p-4 rounded-2xl bg-black/20 border border-border group/loc-helper">
                       <div className="flex justify-between items-center mb-2">
                         <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-60">My Current Location</div>
                         {detectedLocation?.accuracy && (
                           <div className={cn(
                             "text-[8px] font-black uppercase px-2 py-0.5 rounded-full",
-                            detectedLocation.accuracy < 20 ? "bg-success/20 text-success" : "bg-warning/20 text-warning"
+                            detectedLocation.accuracy < 20 ? "bg-success/20 text-[#15803d] dark:text-success" : "bg-warning/20 text-[#92400e] dark:text-warning"
                           )}>
                              Accurate to {detectedLocation.accuracy.toFixed(0)}m
                           </div>
@@ -1046,7 +1137,7 @@ export default function Classes() {
                             }
                           }}
                           disabled={!detectedLocation}
-                          className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] font-bold text-primary uppercase tracking-wider hover:bg-primary hover:text-white transition-all disabled:opacity-30"
+                          className="px-3 py-1.5 rounded-lg bg-muted/20 border border-border text-[10px] font-bold text-primary uppercase tracking-wider hover:bg-primary hover:text-white transition-all disabled:opacity-30"
                         >
                           Auto-Fill
                         </button>
@@ -1096,9 +1187,9 @@ export default function Classes() {
               Import a punch file to unlock the review roster.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px]">
-                <thead>
+            <div className="overflow-x-auto relative max-h-[650px] overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/10 hover:scrollbar-thumb-muted-foreground/20">
+              <table className="w-full min-w-[980px] border-collapse">
+                <thead className="sticky top-0 z-20 bg-card/95 backdrop-blur-md shadow-sm">
                   <tr className="border-b border-card-border">
                     {["Student", "Roll No.", "Punch Time", "Student Mark", "Status", "Note"].map((column) => (
                       <th
@@ -1115,9 +1206,9 @@ export default function Classes() {
                     <tr key={record.id} className="border-b border-card-border/60 hover:bg-muted/20 transition-colors">
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full overflow-hidden bg-muted border border-card-border">
+                          <div className="w-10 h-10 rounded-full overflow-hidden bg-muted border border-card-border shadow-sm group-hover:scale-105 transition-all duration-300">
                             <img
-                              src={`${import.meta.env.BASE_URL}${record.avatarUrl.replace("/images/", "images/")}`}
+                              src={`https://api.dicebear.com/7.x/notionists/svg?seed=${record.studentName}&backgroundColor=b6e3f4,c0aede,d1d4f9`}
                               alt={record.studentName}
                               className="w-full h-full object-cover"
                             />
@@ -1136,8 +1227,8 @@ export default function Classes() {
                             className={cn(
                               "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
                               record.studentMarked
-                                ? "bg-success/15 text-success"
-                                : "bg-warning/15 text-warning",
+                                ? "bg-success/15 text-[#15803d] dark:text-success"
+                                : "bg-warning/15 text-[#92400e] dark:text-warning",
                             )}
                           >
                             {record.studentMarked ? "Marked in class" : "Not marked"}
@@ -1150,22 +1241,26 @@ export default function Classes() {
                         </div>
                       </td>
                       <td className="px-5 py-3.5">
-                        <select
+                        <Select
                           value={draftStatuses[record.id] ?? record.status}
-                          onChange={(event) =>
+                          onValueChange={(val) =>
                             setDraftStatuses((current) => ({
                               ...current,
-                              [record.id]: event.target.value as AttendanceStatus,
+                              [record.id]: val as AttendanceStatus,
                             }))
                           }
-                          className="w-full rounded-xl border border-card-border bg-muted/60 px-3 py-2 text-sm text-foreground outline-none"
                         >
-                          {STATUS_OPTIONS.map((status) => (
-                            <option key={status} value={status}>
-                              {getStatusLabel(status)}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger className="w-full h-10 rounded-xl border border-border bg-muted/20 px-3 text-xs font-semibold text-foreground focus:ring-primary/40 transition-all">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-2xl border border-border bg-card backdrop-blur-2xl">
+                            {STATUS_OPTIONS.map((status) => (
+                              <SelectItem key={status} value={status} className="rounded-xl focus:bg-primary">
+                                {getStatusLabel(status)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </td>
                       <td className="px-5 py-3.5">
                         <input
@@ -1255,7 +1350,50 @@ export default function Classes() {
           )}
         </div>
       </div>
-    </AppLayout>
+
+      <Dialog open={isCreateClassOpen} onOpenChange={setIsCreateClassOpen}>
+        <DialogContent className="sm:max-w-[420px] bg-card backdrop-blur-2xl border-border p-0 overflow-hidden rounded-[32px] shadow-2xl">
+          <div className="p-8 space-y-6">
+            <div className="space-y-2 text-center">
+              <div className="mx-auto w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center mb-4">
+                <Plus className="w-6 h-6 text-primary" strokeWidth={2.5} />
+              </div>
+              <DialogTitle className="text-2xl font-black tracking-tight text-white">Create New Class</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">Initialize a new strategic classroom.</DialogDescription>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Class Code (e.g. CS101)</Label>
+                <Input 
+                  value={newClassCode}
+                  onChange={(e) => setNewClassCode(e.target.value.toUpperCase())}
+                  className="h-12 rounded-2xl bg-muted/20 border-border focus:ring-1 focus:ring-primary/40"
+                  placeholder="Enter code"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Class Name</Label>
+                <Input 
+                  value={newClassName}
+                  onChange={(e) => setNewClassName(e.target.value)}
+                  className="h-12 rounded-2xl bg-muted/20 border-border focus:ring-1 focus:ring-primary/40"
+                  placeholder="Enter name"
+                />
+              </div>
+            </div>
+
+            <Button 
+              onClick={() => createClassMutation.mutate()}
+              disabled={createClassMutation.isPending}
+              className="w-full h-12 rounded-2xl bg-primary font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
+            >
+              {createClassMutation.isPending ? "Creating..." : "Initialize Class"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -1274,7 +1412,7 @@ function SessionOverview({ session }: { session: SessionPayload }) {
           {
             label: "Self Mark",
             value: session.session.studentMarkedCount,
-            color: "text-success bg-success/10 border-success/20",
+            color: "text-[#15803d] dark:text-success bg-success/10 border-success/20",
             icon: Users,
             sub: "Total Marked"
           },
@@ -1288,12 +1426,12 @@ function SessionOverview({ session }: { session: SessionPayload }) {
           {
             label: "Conflict",
             value: session.session.punchOnlyCount,
-            color: "text-amber-500 bg-amber-500/10 border-amber-500/20",
+            color: "text-[#92400e] dark:text-amber-500 bg-amber-500/10 border-amber-500/20",
             icon: XCircle,
             sub: "Missing Mark"
           },
         ].map((item) => (
-          <div key={item.label} className="group rounded-[1.25rem] bg-white/[0.02] border border-white/5 p-4 hover:bg-white/[0.04] transition-all duration-300">
+          <div key={item.label} className="group rounded-[1.25rem] bg-muted/10 border border-border p-4 hover:bg-white/[0.04] transition-all duration-300">
             <div className={cn("inline-flex rounded-xl p-2.5 mb-3 border", item.color)}>
               <item.icon className="w-4 h-4" />
             </div>
@@ -1303,9 +1441,9 @@ function SessionOverview({ session }: { session: SessionPayload }) {
         ))}
       </div>
 
-      <div className="p-5 rounded-2xl bg-gradient-to-r from-primary/10 via-white/[0.02] to-transparent border border-white/10">
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-primary/10 via-white/[0.02] to-transparent border border-border">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
+          <div className="w-10 h-10 rounded-xl bg-muted/20 flex items-center justify-center border border-border">
             <Clock className="w-5 h-5 text-primary" />
           </div>
           <div>
@@ -1327,7 +1465,7 @@ function SessionOverview({ session }: { session: SessionPayload }) {
           </div>
           <div>
             <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-40 mb-1">Proxy Alerts</div>
-            <div className="text-xs font-bold text-amber-500">
+            <div className="text-xs font-bold text-[#92400e] dark:text-amber-500">
               {session.session.markOnlyCount} Orphans
             </div>
           </div>
@@ -1347,46 +1485,50 @@ function UploadHistoryCard({
   item,
   isDeleting,
   onDelete,
+  compact = false,
 }: {
   item: UploadedWorkbookHistoryItem;
   isDeleting: boolean;
   onDelete: () => void;
+  compact?: boolean;
 }) {
   return (
-    <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5 hover:bg-white/[0.045] transition-colors">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20">
+    <div className="rounded-[1.5rem] border border-border bg-muted/20 p-4 sm:p-5 hover:bg-white/[0.045] transition-colors group/card">
+      <div className="flex flex-col gap-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="shrink-0 p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
               <FileSpreadsheet className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-bold text-foreground truncate">{item.sourceFileName}</div>
-              <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mt-1 opacity-60">
-                Uploaded {new Date(item.importedAt).toLocaleString()}
+              <div className="text-sm font-black text-foreground leading-tight break-all transition-colors line-clamp-2">
+                {item.sourceFileName}
+              </div>
+              <div className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground mt-1.5 opacity-60">
+                Uploaded {new Date(item.importedAt).toLocaleDateString()}
               </div>
             </div>
           </div>
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-widest",
+              item.reviewStatus === "finalized"
+                ? "bg-success/15 text-[#15803d] dark:text-success"
+                : item.reviewStatus === "recheck_pending"
+                  ? "bg-warning/15 text-[#92400e] dark:text-warning"
+                  : "bg-muted/30 text-muted-foreground",
+            )}
+          >
+            {item.reviewStatus.replace(/_/g, " ")}
+          </span>
         </div>
-        <span
-          className={cn(
-            "shrink-0 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider",
-            item.reviewStatus === "finalized"
-              ? "bg-success/15 text-success"
-              : item.reviewStatus === "recheck_pending"
-                ? "bg-warning/15 text-warning"
-                : "bg-white/10 text-muted-foreground",
-          )}
-        >
-          {item.reviewStatus.replace(/_/g, " ")}
-        </span>
       </div>
 
-      <div className="mt-5 grid grid-cols-3 gap-3">
+      <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-2">
         <HistoryMetric label="Session Date" value={item.sessionDate} />
         <HistoryMetric label="Imported Rows" value={item.uploadCount} />
         <HistoryMetric
-          label="Last Updated"
+          label="Last Update"
           value={new Date(item.updatedAt).toLocaleDateString()}
         />
       </div>
@@ -1414,11 +1556,11 @@ function HistoryMetric({
   value: string | number;
 }) {
   return (
-    <div className="rounded-2xl bg-black/20 border border-white/5 px-4 py-3">
-      <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-60">
+    <div className="rounded-xl bg-black/20 border border-border p-2.5 sm:p-3">
+      <div className="text-[8px] sm:text-[9px] uppercase font-black tracking-widest text-muted-foreground opacity-50">
         {label}
       </div>
-      <div className="mt-2 text-sm font-bold text-foreground break-words">{value}</div>
+      <div className="mt-1 text-[11px] sm:text-xs font-bold text-foreground leading-tight">{value}</div>
     </div>
   );
 }
@@ -1445,7 +1587,7 @@ function ClassCard({
         "dark-card relative overflow-hidden rounded-[2rem] text-left transition-all duration-300 group",
         isSelected
           ? "border-primary/40 bg-primary/5 shadow-2xl shadow-primary/10 ring-1 ring-primary/20"
-          : "hover:border-white/10 hover:bg-white/[0.02]",
+          : "hover:border-border hover:bg-muted/10",
       )}
     >
       <div
@@ -1461,13 +1603,13 @@ function ClassCard({
         <div className="absolute inset-0 bg-black/10 backdrop-blur-[1px]" />
 
         <div className="relative z-10 flex items-start justify-between">
-          <div className="px-2.5 py-1 rounded-lg bg-white/20 backdrop-blur-md border border-white/20">
+          <div className="px-2.5 py-1 rounded-lg bg-white/20 backdrop-blur-md border border-border/40">
             <span className="text-white text-[10px] font-black uppercase tracking-[0.2em]">
               {classItem.code}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/30 backdrop-blur-md border border-white/10">
-            <Users className="w-3 h-3 text-white/80" />
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/30 backdrop-blur-md border border-border">
+            <Users className="w-3 h-3 text-foreground/80" />
             <span className="text-[10px] font-bold text-white leading-none">
               {classItem.expectedStudents}
             </span>
@@ -1485,14 +1627,14 @@ function ClassCard({
             <span className={cn("w-2 h-2 rounded-full animate-pulse", status.dot)} />
             <span className="text-[10px] uppercase font-black tracking-widest">{status.label}</span>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground bg-white/5 px-2.5 py-1 rounded-lg border border-white/5">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground bg-muted/20 px-2.5 py-1 rounded-lg border border-border">
             <Calendar className="w-3 h-3" />
             {classItem.room}
           </div>
         </div>
 
         <div className="mb-6 space-y-3">
-          <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-3.5 group/net transition-colors hover:bg-white/[0.04]">
+          <div className="rounded-2xl bg-muted/10 border border-border p-3.5 group/net transition-colors hover:bg-white/[0.04]">
             <div className="flex items-center gap-2 mb-2">
               <Wifi className="w-3.5 h-3.5 text-primary opacity-60" />
               <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-40">Boundary Rule</div>
@@ -1504,8 +1646,8 @@ function ClassCard({
 
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Verified", value: classItem.verifiedCount, tone: "text-success", bg: "bg-success/5 border-success/10" },
-              { label: "Check", value: classItem.questionableCount, tone: "text-warning", bg: "bg-warning/5 border-warning/10" },
+              { label: "Verified", value: classItem.verifiedCount, tone: "text-[#15803d] dark:text-success", bg: "bg-success/5 border-success/10" },
+              { label: "Check", value: classItem.questionableCount, tone: "text-[#92400e] dark:text-warning", bg: "bg-warning/5 border-warning/10" },
               { label: "Missing", value: classItem.absentCount, tone: "text-destructive", bg: "bg-destructive/5 border-destructive/10" },
             ].map((item) => (
               <div key={item.label} className={cn("rounded-xl p-2.5 text-center border", item.bg)}>
@@ -1521,7 +1663,7 @@ function ClassCard({
             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-40">Success Rate</span>
             <span className="text-lg font-black text-foreground">{classItem.attendanceRate}<span className="text-xs ml-0.5 opacity-40">%</span></span>
           </div>
-          <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5 relative">
+          <div className="h-2 bg-muted/20 rounded-full overflow-hidden border border-border relative">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${classItem.attendanceRate}%` }}
@@ -1536,7 +1678,7 @@ function ClassCard({
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-white/5">
+        <div className="flex items-center justify-between pt-4 border-t border-border">
           <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
             <Clock className="w-3 h-3" />
             {classItem.latestSessionDate || "No data"}

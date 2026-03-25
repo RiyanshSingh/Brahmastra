@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Users, TrendingUp } from "lucide-react";
 import { useDashboardStats } from "@/hooks/use-dashboard-data";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function TotalStudentsCard() {
   const { data, isLoading } = useDashboardStats();
@@ -23,7 +24,7 @@ export function TotalStudentsCard() {
           <span className="font-medium text-sm tracking-wide uppercase">Total Enrolled</span>
         </div>
         {/* More Options */}
-        <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors">
+        <div className="w-8 h-8 rounded-full bg-muted/20 border border-border flex items-center justify-center cursor-pointer hover:bg-muted/30 transition-colors">
           <div className="flex gap-1">
             <div className="w-1 h-1 rounded-full bg-white/40"></div>
             <div className="w-1 h-1 rounded-full bg-white/40"></div>
@@ -34,13 +35,13 @@ export function TotalStudentsCard() {
 
       <div className="relative z-10 mt-8">
         {isLoading ? (
-          <div className="h-12 w-32 bg-slate-800 rounded animate-pulse"></div>
+          <Skeleton className="h-12 w-32" />
         ) : (
           <div className="flex items-end gap-4">
             <h3 className="text-5xl font-bold tracking-tight">
               {data?.totalStudents.toLocaleString()}
             </h3>
-            <div className="flex items-center gap-1.5 text-success mb-2 bg-success/15 px-3 py-1 rounded-full border border-success/20 shadow-sm shadow-success/10">
+            <div className="flex items-center gap-1.5 text-[#15803d] dark:text-success mb-2 bg-success/15 px-3 py-1 rounded-full border border-success/20 shadow-sm shadow-success/10">
               <TrendingUp className="w-3.5 h-3.5" />
               <span className="text-xs font-bold tracking-tight">+{data?.enrollmentTrend}%</span>
             </div>

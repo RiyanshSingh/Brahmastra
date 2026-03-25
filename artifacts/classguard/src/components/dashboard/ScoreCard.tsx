@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { MoreHorizontal } from "lucide-react";
 import { useDashboardStats } from "@/hooks/use-dashboard-data";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function ScoreCard() {
   const { data, isLoading } = useDashboardStats();
@@ -10,7 +11,7 @@ export function ScoreCard() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.3 }}
-      className="dark-card rounded-[2rem] p-6"
+      className="dark-card rounded-[2rem] p-6 border-foreground/[0.08]"
     >
       <div className="flex justify-between items-center mb-6">
         <h3 className="font-semibold text-lg text-foreground">Attendance Score</h3>
@@ -21,7 +22,7 @@ export function ScoreCard() {
 
       <div className="flex flex-col items-center justify-center py-4">
         {isLoading ? (
-          <div className="w-32 h-32 rounded-full border-8 border-muted animate-pulse"></div>
+          <Skeleton className="w-32 h-32 rounded-full border-8 border-muted/20" />
         ) : (
           <div className="relative">
             {/* SVG Circular Progress */}
@@ -39,20 +40,22 @@ export function ScoreCard() {
                 cx="72"
                 cy="72"
                 r="60"
-                stroke="currentColor"
+                stroke="#8D6CE5"
                 strokeWidth="12"
                 fill="transparent"
                 strokeDasharray="377"
                 strokeDashoffset={377 - (377 * (data?.score || 0)) / 100}
                 strokeLinecap="round"
-                className="text-primary"
+                className="drop-shadow-[0_0_8px_rgba(141,108,229,0.3)]"
                 initial={{ strokeDashoffset: 377 }}
                 animate={{ strokeDashoffset: 377 - (377 * (data?.score || 0)) / 100 }}
                 transition={{ duration: 1.5, ease: "easeOut" }}
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-4xl font-bold text-foreground">{data?.score}%</span>
+              <span className="text-4xl font-black tracking-tighter text-foreground">
+                {data?.score}%
+              </span>
             </div>
           </div>
         )}

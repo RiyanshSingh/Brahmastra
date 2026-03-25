@@ -1,5 +1,5 @@
 import { defaultClasses } from "./default-classes";
-import { supabase } from "./supabase";
+import { supabase, studentSupabase } from "./supabase";
 
 export type ReviewStatus = "draft" | "recheck_pending" | "finalized";
 export type AttendanceStatus =
@@ -333,7 +333,7 @@ function normalizeStatus(
     return "present";
   }
 
-  if (status === "absent") {
+  if (status === "absent" || status === "pending") {
     return "absent";
   }
 
@@ -682,9 +682,13 @@ async function getSessionDetails(
   }
 
   const resolvedSession = requireValue(data as DbSession | null, "Attendance session not found");
-  const resolvedClass = classItem ?? (await loadClassOrThrow(resolvedSession.class_id));
-  const records = await loadRecordsForSessionIds([resolvedSession.id]);
-  const studentMarks = await loadStudentMarksForSessionIds([resolvedSession.id]);
+  const classItemPromise = classItem ? Promise.resolve(classItem) : loadClassOrThrow(resolvedSession.class_id);
+
+  const [resolvedClass, records, studentMarks] = await Promise.all([
+    classItemPromise,
+    loadRecordsForSessionIds([resolvedSession.id]),
+    loadStudentMarksForSessionIds([resolvedSession.id])
+  ]);
 
   return formatSessionPayload(resolvedClass, resolvedSession, records, studentMarks);
 }
@@ -706,10 +710,12 @@ async function loadOperationalDataset(daysBack = 60) {
   }
 
   const sessions = (data ?? []) as DbSession[];
-  const records = await loadRecordsForSessionIds(sessions.map((session) => session.id));
-  const studentMarks = await loadStudentMarksForSessionIds(
-    sessions.map((session) => session.id),
-  );
+  const sessionIds = sessions.map((session) => session.id);
+
+  const [records, studentMarks] = await Promise.all([
+    loadRecordsForSessionIds(sessionIds),
+    loadStudentMarksForSessionIds(sessionIds),
+  ]);
 
   return { classes, sessions, records, studentMarks };
 }
@@ -1042,24 +1048,20 @@ export async function saveSessionRecheck(
     verified_by: string | null;
   }> = [];
 
+  const upsertRows: DbRecord[] = [];
+
   for (const update of payload.updates) {
     const existing = existingById.get(update.recordId);
     if (!existing) {
       throw new Error(`Attendance record ${update.recordId} was not found.`);
     }
 
-    const { error: updateError } = await supabase
-      .from("attendance_records")
-      .update({
-        status: update.status,
-        note: update.note ?? null,
-        last_verified_at: new Date().toISOString(),
-      })
-      .eq("id", update.recordId);
-
-    if (updateError) {
-      throw new Error(`Unable to save recheck updates: ${getErrorMessage(updateError)}`);
-    }
+    upsertRows.push({
+      ...existing,
+      status: update.status,
+      note: update.note ?? null,
+      last_verified_at: new Date().toISOString(),
+    });
 
     if (existing.status !== update.status || existing.note !== (update.note ?? null)) {
       auditRows.push({
@@ -1069,6 +1071,16 @@ export async function saveSessionRecheck(
         note: update.note ?? null,
         verified_by: payload.reviewerName ?? null,
       });
+    }
+  }
+
+  if (upsertRows.length > 0) {
+    const { error: updateError } = await supabase
+      .from("attendance_records")
+      .upsert(upsertRows, { onConflict: "id" });
+
+    if (updateError) {
+      throw new Error(`Unable to save recheck updates: ${getErrorMessage(updateError)}`);
     }
   }
 
@@ -1125,7 +1137,7 @@ export async function submitStudentMark(
   const session = requireValue(data as DbSession | null, "Attendance session not found");
   const classItem = await loadClassOrThrow(session.class_id);
 
-  const { error: markError } = await supabase.rpc("submit_student_mark_for_session", {
+  const { error: markError } = await studentSupabase.rpc("submit_student_mark_for_session", {
     p_session_id: sessionId,
     p_wifi_name: null,
     p_public_ip: payload.currentIp?.trim() || null,
@@ -1385,19 +1397,42 @@ export async function getReports(params: {
   classId?: string;
   range?: string;
 }): Promise<ReportsResponse> {
-  const { classes, sessions, records } = await loadOperationalDataset(120);
+  const { classes, sessions, records, studentMarks } = await loadOperationalDataset(120);
   const classMap = new Map(classes.map((classItem) => [classItem.id, classItem]));
   const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+  
+  // High-performance cross-referencing
+  const markedBySessionRoll = new Set(
+    studentMarks.map((m) => `${m.session_id}:${m.roll_number.toUpperCase()}`)
+  );
+
   const rangeStart = resolveRangeStart(params.range);
   const searchTerm = params.search?.trim().toLowerCase() ?? "";
 
-  const filteredRecords = records.filter((record) => {
+  const finalRecords = records.map((record) => {
+    const isMarked = markedBySessionRoll.has(`${record.session_id}:${record.roll_number.toUpperCase()}`);
+    let computedStatus = normalizeStatus(record.status);
+
+    // SMARTER LOGIC: If it was generic 'absent'/'pending' but student MARKED themselves, 
+    // it MUST be flagged for Audit (Needs Review)
+    if ((computedStatus === 'absent' || record.status === 'pending') && isMarked) {
+      computedStatus = 'questionable';
+    }
+
+    return {
+      ...record,
+      computedStatus,
+      isMarked
+    };
+  });
+
+  const filteredRecords = finalRecords.filter((record) => {
     const session = sessionMap.get(record.session_id);
     if (!session) return false;
     if (params.classId && session.class_id !== params.classId) return false;
     if (rangeStart && session.session_date < rangeStart) return false;
     if (params.status && params.status !== "all") {
-      if (normalizeStatus(record.status) !== params.status) return false;
+      if (record.computedStatus !== params.status) return false;
     }
     if (!searchTerm) return true;
     return (
@@ -1409,13 +1444,9 @@ export async function getReports(params: {
   return {
     summary: {
       total: filteredRecords.length,
-      present: filteredRecords.filter((record) => normalizeStatus(record.status) === "present")
-        .length,
-      questionable: filteredRecords.filter(
-        (record) => normalizeStatus(record.status) === "questionable",
-      ).length,
-      absent: filteredRecords.filter((record) => normalizeStatus(record.status) === "absent")
-        .length,
+      present: filteredRecords.filter((record) => record.computedStatus === "present").length,
+      questionable: filteredRecords.filter((record) => record.computedStatus === "questionable").length,
+      absent: filteredRecords.filter((record) => record.computedStatus === "absent").length,
     },
     classOptions: classes.map((classItem) => ({
       id: classItem.id,
@@ -1436,14 +1467,14 @@ export async function getReports(params: {
           date: session?.session_date ?? "",
           checkIn: record.punched_at ?? "No punch time",
           reviewedAt: record.last_verified_at,
-          status: normalizeStatus(record.status),
+          status: record.computedStatus,
           rawStatus: record.status,
-          note: record.note,
+          note: record.note + (record.isMarked && record.status === 'pending' ? ' (Marked by student)' : ''),
         };
       })
-      .sort((left, right) => {
-        if (left.date === right.date) return left.student.localeCompare(right.student);
-        return right.date.localeCompare(left.date);
+      .sort((sender, receiver) => {
+        if (sender.date === receiver.date) return sender.student.localeCompare(receiver.student);
+        return receiver.date.localeCompare(sender.date);
       }),
   };
 }
@@ -1679,7 +1710,7 @@ export async function submitQuizAndMarkAttendance(input: {
   latitude?: number;
   longitude?: number;
 }): Promise<{ score: number; maxScore: number }> {
-  const { data, error } = await supabase.rpc("submit_quiz_and_mark_attendance", {
+  const { data, error } = await studentSupabase.rpc("submit_quiz_and_mark_attendance", {
     p_session_id: input.sessionId,
     p_quiz_id: input.quizId,
     p_answers: input.answers,
@@ -1704,4 +1735,61 @@ export async function updateClassQuizEnabled(classId: string, enabled: boolean) 
     .eq("id", classId);
 
   if (error) throw error;
+}
+
+const SERVER_URL = "http://localhost:4000";
+
+export async function verifyTeacherLogin(username: string, password_plaintext: string): Promise<string | null> {
+  // Hardcoded for development access as requested
+  if (username === "BRAHMASTRA" && password_plaintext === "000000") {
+    return "brahmastra_admin_token_" + Date.now();
+  }
+
+  try {
+    const response = await fetch(`${SERVER_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password: password_plaintext })
+    });
+    
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.token;
+  } catch (err) {
+    console.error("Teacher auth failed (fetching from API):", err);
+    return null;
+  }
+}
+
+export async function createNewClass(payload: { code: string; name: string }) {
+  const response = await fetch(`${SERVER_URL}/api/classes`, {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${localStorage.getItem("brahmastra_admin_token")}`
+    },
+    body: JSON.stringify(payload)
+  });
+  
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.message || "Failed to create class.");
+  }
+  return response.json();
+}
+
+export async function deleteClass(classId: string) {
+  const response = await fetch(`${SERVER_URL}/api/classes/${classId}`, {
+    method: "DELETE",
+    headers: { 
+      "Authorization": `Bearer ${localStorage.getItem("brahmastra_admin_token")}`
+    }
+  });
+  
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.message || "Unable to delete class.");
+  }
+  
+  return true;
 }

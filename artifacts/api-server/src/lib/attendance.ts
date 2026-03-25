@@ -539,6 +539,22 @@ export async function createClass(input: z.infer<typeof createClassSchema>) {
   };
 }
 
+export async function deleteClass(classId: string) {
+  const { error } = await supabase
+    .from("classes")
+    .delete()
+    .eq("id", classId);
+
+  if (error) {
+    throw new HttpError(
+      500,
+      `Unable to delete class: ${getSupabaseErrorMessage(error)}`,
+    );
+  }
+
+  return true;
+}
+
 export async function importPunchesForClass(
   classId: string,
   input: z.infer<typeof importPunchesSchema>,

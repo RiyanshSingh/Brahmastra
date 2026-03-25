@@ -3,6 +3,7 @@ import routes from "./routes";
 import { env } from "./lib/env";
 import { logger } from "./lib/logger";
 import { applyCors, createRouteHandler, isPreflight, sendError } from "./lib/http";
+import { authMiddleware } from "./middlewares/auth";
 
 const apiRouteHandler = createRouteHandler(routes);
 
@@ -41,6 +42,7 @@ async function app(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const pathname = url.pathname;
 
   try {
+    authMiddleware(req);
     if (pathname === "/") {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json; charset=utf-8");

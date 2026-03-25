@@ -1,97 +1,310 @@
-import { ReactNode, useState } from "react";
-import { AppSidebar } from "./AppSidebar";
-import { Bell, Menu, Plus, Search } from "lucide-react";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { ReactNode, useState, useEffect } from "react";
+import { Link, useLocation } from "wouter";
+import { 
+  Bell, 
+  Menu, 
+  Plus, 
+  Search, 
+  Shield, 
+  User, 
+  Lock,
+  ChevronDown,
+  LogOut,
+  LayoutDashboard,
+  BookOpen,
+  FileText,
+  BarChart2,
+  KeyRound,
+  Smartphone
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription 
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { verifyTeacherLogin } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+
+const TEACHER_ITEMS = [
+  { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Classrooms", href: "/classes", icon: BookOpen },
+  { label: "Reports", href: "/reports", icon: FileText },
+  { label: "Analytics", href: "/analytics", icon: BarChart2 },
+];
 
 interface AppLayoutProps {
   children: ReactNode;
-  title: string;
+  title?: string;
   subtitle?: string;
   action?: ReactNode;
 }
 
+const TITLE_MAP: Record<string, string> = {
+  "/": "Student Attendance",
+  "/dashboard": "Teacher Dashboard",
+  "/classes": "Classroom Management",
+  "/reports": "Attendance Reports",
+  "/analytics": "Strategic Analytics",
+};
+
 export function AppLayout({ children, title, subtitle, action }: AppLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [location, navigate] = useLocation();
+  const displayTitle = title || TITLE_MAP[location] || "Brahmastra Dashboard";
+  const { toast } = useToast();
+  
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => {
+    return localStorage.getItem("brahmastra_admin_session") === "true";
+  });
+  
+  const [theme, setTheme] = useState<"dark" | "light-classic" | "light-premium">(() => {
+    const saved = localStorage.getItem("brahmastra_theme");
+    return (saved as any) || "dark";
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove("dark", "light-classic", "light-premium");
+    root.classList.add(theme);
+    localStorage.setItem("brahmastra_theme", theme);
+  }, [theme]);
+
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const toggleTheme = () => {
+    if (theme === "dark") setTheme("light-classic");
+    else if (theme === "light-classic") setTheme("light-premium");
+    else setTheme("dark");
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    try {
+      const token = await verifyTeacherLogin(username, password);
+      if (token) {
+        setIsAdminAuthenticated(true);
+        localStorage.setItem("brahmastra_admin_session", "true");
+        localStorage.setItem("brahmastra_admin_token", token);
+        setIsLoginDialogOpen(false);
+        toast({ title: "Access Granted", description: "Welcome, Professor." });
+        navigate("/dashboard");
+      } else {
+        toast({ title: "Error", description: "Invalid credentials.", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "System Error", variant: "destructive" });
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAdminAuthenticated(false);
+    localStorage.removeItem("brahmastra_admin_session");
+    localStorage.removeItem("brahmastra_admin_token");
+    navigate("/");
+  };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="w-[280px] max-w-[88vw] p-0 sm:w-[300px]">
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <AppSidebar
-            className="h-full w-full border-r-0"
-            onNavigate={() => setSidebarOpen(false)}
-          />
-        </SheetContent>
-      </Sheet>
+    <div className="flex h-screen flex-col bg-background selection:bg-primary/20 transition-colors duration-500">
+      {/* Top Professional Navbar */}
+      <header className="sticky top-0 z-50 w-full border-b border-foreground/5 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-20 max-w-[1600px] items-center justify-between px-6 lg:px-12">
+          
+          {/* Logo Section */}
+          <Link href="/" className="flex items-center gap-3.5 group transition-transform active:scale-95">
+            <div className="relative flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-xl sm:rounded-2xl bg-foreground/5 border border-foreground/10 shadow-xl overflow-hidden ring-1 ring-foreground/5">
+               <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none" />
+               <video 
+                src={`${import.meta.env.BASE_URL}logo-video.mp4`}
+                autoPlay 
+                loop 
+                muted 
+                playsInline 
+                className="absolute inset-0 w-full h-full object-cover scale-[1.05]"
+              />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-base sm:text-lg lg:text-xl font-black tracking-tighter text-foreground uppercase">Brahmastra</span>
+            </div>
+          </Link>
 
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar */}
-        <header className="shrink-0 border-b border-border/70 bg-background/88 backdrop-blur-xl">
-          <div className="px-4 py-3 md:px-6 md:py-4">
-            <div className="flex items-center justify-between gap-2 md:gap-4">
-              <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-4">
-                <button
-                  onClick={() => setSidebarOpen(true)}
-                  className="group relative flex h-10 w-10 md:h-11 md:w-11 shrink-0 items-center justify-center rounded-2xl border border-card-border bg-card/90 text-muted-foreground shadow-[0_8px_24px_rgba(0,0,0,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:text-foreground"
-                  aria-label="Open navigation menu"
-                >
-                  <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/16 via-transparent to-transparent opacity-80" />
-                  <Menu className="relative h-4.5 w-4.5" />
-                </button>
+          {/* Navigation Links (Conditional) */}
+          <nav className="hidden lg:flex items-center gap-1.5 p-1.5 rounded-2xl">
+            {isAdminAuthenticated && (
+              <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-foreground/[0.02] border border-foreground/[0.04]">
+                {TEACHER_ITEMS.map(({ label, href, icon: Icon }) => {
+                  const isActive = location === href;
+                  return (
+                    <Link key={label} href={href}>
+                      <button className={cn(
+                        "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all transition-all duration-300",
+                        isActive 
+                          ? "bg-foreground/[0.05] text-foreground shadow-inner" 
+                          : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.02]"
+                      )}>
+                        <Icon className={cn("w-4 h-4", isActive && "text-primary")} />
+                        {label}
+                      </button>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </nav>
 
-                <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-lg font-bold leading-tight text-foreground md:text-[1.75rem]">
-                    {title}
+          {/* Action Area */}
+          <div className="flex items-center gap-4">
+              <button 
+                onClick={toggleTheme}
+                className="flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-full bg-foreground/[0.03] border border-foreground/[0.05] hover:bg-foreground/[0.08] transition-all group"
+              >
+                {theme === "dark" && <LayoutDashboard className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400 group-hover:rotate-12 transition-transform" />}
+                {theme === "light-classic" && <User className="w-4 h-4 sm:w-5 sm:h-5 text-[#92400e] dark:text-amber-500 group-hover:rotate-12 transition-transform" />}
+                {theme === "light-premium" && <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-primary group-hover:rotate-12 transition-transform" />}
+              </button>
+
+             {!isAdminAuthenticated ? (
+               <div className="flex items-center gap-3">
+                 <Link href="/">
+                    <Button variant="ghost" className="hidden sm:flex rounded-2xl font-bold text-sm gap-2">
+                      <Smartphone className="w-4 h-4" />
+                      Student Panel
+                    </Button>
+                 </Link>
+                 <Button 
+                   onClick={() => setIsLoginDialogOpen(true)}
+                   className="hidden sm:inline-flex rounded-2xl bg-gradient-to-r from-indigo-500 to-primary font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all px-6"
+                 >
+                   Teacher Login
+                 </Button>
+               </div>
+             ) : (
+               <div className="flex items-center gap-4">
+                  <div className="flex h-10 items-center gap-3 rounded-2xl bg-foreground/[0.03] border border-foreground/[0.05] px-4">
+                     <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                     <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Admin Active</span>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleLogout}
+                    className="rounded-2xl border-foreground/10 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-all font-bold group"
+                  >
+                    <LogOut className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+                    Logout
+                  </Button>
+               </div>
+             )}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto relative">
+         {/* Subtle background glow */}
+         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[400px] bg-primary/5 blur-[120px] pointer-events-none -z-10" />
+
+         <div className="mx-auto max-w-[1600px] px-2 sm:px-6 lg:px-12 py-6 lg:py-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {/* Page Header Integration */}
+            {(displayTitle || subtitle || action) && (
+              <div className="mb-8 px-4 flex flex-wrap items-end justify-between gap-4">
+                <div className="space-y-1">
+                  <h1 className="text-3xl font-black text-foreground tracking-tighter uppercase whitespace-nowrap">
+                    {displayTitle}
                   </h1>
                   {subtitle && (
-                    <p className="hidden md:block mt-1 max-w-3xl truncate text-xs text-muted-foreground md:text-sm">
+                    <p className="text-sm font-medium text-muted-foreground/60 tracking-wide uppercase">
                       {subtitle}
                     </p>
                   )}
                 </div>
+                {action && <div className="flex items-center gap-3">{action}</div>}
+              </div>
+            )}
+            {children}
+         </div>
+      </main>
+
+      {/* Teacher Login Dialog */}
+      <Dialog open={isLoginDialogOpen} onOpenChange={setIsLoginDialogOpen}>
+        <DialogContent className="sm:max-w-[420px] bg-card backdrop-blur-2xl border-border p-0 overflow-hidden rounded-[32px] shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-indigo-500/10 pointer-events-none" />
+          
+          <form onSubmit={handleLogin}>
+            <div className="p-10 space-y-8 relative z-10">
+              <div className="space-y-3 text-center">
+                <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/20 flex items-center justify-center mb-6 shadow-2xl shadow-primary/10">
+                  <Shield className="w-7 h-7 text-primary" strokeWidth={2.5} />
+                </div>
+                <DialogTitle className="text-3xl font-black tracking-tight text-white leading-none">
+                  Teachers Armor
+                </DialogTitle>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] opacity-60 pt-1">
+                  Secure Access • v1.2
+                </p>
               </div>
 
-              <div className="flex items-center gap-2 md:gap-3">
-                <div className="hidden min-w-[200px] items-center gap-3 rounded-2xl border border-card-border bg-card/40 backdrop-blur-sm px-4 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] md:flex lg:min-w-[320px] focus-within:border-primary/40 focus-within:bg-card/60 transition-all duration-300">
-                  <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    className="w-full border-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60"
-                  />
+              <div className="space-y-5">
+                <div className="space-y-2.5">
+                  <Label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50 ml-1">
+                    Administrator ID
+                  </Label>
+                  <div className="relative group">
+                    <User className="absolute left-4.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground/30 group-focus-within:text-primary transition-colors" />
+                    <Input
+                      placeholder="Enter ID"
+                      className="pl-13 h-14 rounded-2xl bg-muted/20 border-border focus:ring-1 focus:ring-primary/40 focus:bg-muted/30 transition-all text-sm font-medium"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      required
+                    />
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2 rounded-2xl border border-card-border bg-card/40 backdrop-blur-sm p-1 shadow-[0_10px_30px_rgba(0,0,0,0.18)] md:p-1.5">
-                  <button
-                    className="relative flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-xl text-muted-foreground transition-all duration-200 hover:bg-white/5 hover:text-foreground active:scale-95"
-                    aria-label="Notifications"
-                  >
-                    <Bell className="h-4 w-4 md:h-4.25 md:w-4.25" />
-                    <span className="absolute right-2.5 top-2.5 md:right-3 md:top-3 h-2 w-2 rounded-full border-2 border-background bg-destructive shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-                  </button>
-
-                  <button className="hidden items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_12px_30px_rgba(99,102,241,0.28)] transition-all hover:shadow-primary/40 hover:-translate-y-0.5 active:scale-95 sm:flex">
-                    <Plus className="h-4 w-4" />
-                    New
-                  </button>
-
-                  {action && (
-                    <div className={cn("flex items-center", "max-sm:hidden")}>{action}</div>
-                  )}
+                <div className="space-y-2.5">
+                  <Label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50 ml-1">
+                    Access Password
+                  </Label>
+                  <div className="relative group">
+                    <KeyRound className="absolute left-4.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground/30 group-focus-within:text-primary transition-colors" />
+                    <Input
+                      type="password"
+                      placeholder="••••••••"
+                      className="pl-13 h-14 rounded-2xl bg-muted/20 border-border focus:ring-1 focus:ring-primary/40 focus:bg-muted/30 transition-all text-sm font-medium"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
                 </div>
               </div>
+
+              <Button 
+                type="submit" 
+                className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-500 to-primary hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/30 font-black text-xs uppercase tracking-widest"
+                disabled={isLoggingIn}
+              >
+                {isLoggingIn ? "Verifying Access..." : "Unlock Command Center"}
+              </Button>
             </div>
+          </form>
+          
+          <div className="bg-muted/10 p-5 text-center border-t border-border">
+            <p className="text-[10px] font-bold text-muted-foreground/20 uppercase tracking-tighter">
+              Brahmastra Strategic Security Framework
+            </p>
           </div>
-        </header>
-
-        {/* Scrollable page content */}
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
-      </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

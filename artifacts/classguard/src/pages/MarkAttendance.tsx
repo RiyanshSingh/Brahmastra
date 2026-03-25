@@ -17,12 +17,18 @@ import {
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useClassesData, useLatestSessionData } from "@/hooks/use-attendance-data";
-import { submitStudentMark } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { submitStudentMark, fetchQuiz, submitQuizAndMarkAttendance, type QuizQuestion } from "@/lib/api";
+import { cn, calculateDistance } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useStudentAuth } from "@/providers/student-auth-provider";
 import { getEnrollmentByDevice } from "@/lib/student-auth";
-import { fetchQuiz, submitQuizAndMarkAttendance, type QuizQuestion } from "@/lib/api";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 
 function buildStudentToastError(
   error: Error,
@@ -199,12 +205,20 @@ export default function MarkAttendance() {
   const requiredRadius = latestSession?.session.allowedRadius ?? selectedClass?.allowedRadius ?? 100;
   const requiresLocation = requiredLat !== null && requiredLng !== null;
 
+  const distance = useMemo(() => {
+    if (!requiresLocation || !location || requiredLat === null || requiredLng === null) return null;
+    return calculateDistance(location.lat, location.lng, requiredLat, requiredLng);
+  }, [location, requiredLat, requiredLng, requiresLocation]);
+
+  const locationInRadius =
+    !requiresLocation || (distance !== null && distance <= requiredRadius);
+
   const canMarkAttendance =
     Boolean(latestSession) &&
     (
       (!requiresPublicIpMatch && !requiresLocation) ||
       (requiresPublicIpMatch && wifiIpMatches) ||
-      (requiresLocation && location)
+      (requiresLocation && location && locationInRadius)
     );
 
   const authMutation = useMutation({
@@ -293,7 +307,7 @@ export default function MarkAttendance() {
       if (!latestSession || !latestSession.session.id || quizQuestions.length === 0) return;
       const res = await submitQuizAndMarkAttendance({
         sessionId: latestSession.session.id,
-        quizId: (quizQuestions[0] as any).quiz_id || "", 
+        quizId: (quizQuestions[0] as any).quiz_id || "",
         answers: quizAnswers,
         publicIp: currentIp ?? undefined,
         latitude: location?.lat,
@@ -333,8 +347,8 @@ export default function MarkAttendance() {
   });
 
   return (
-    <AppLayout title="Student Attendance">
-      <div className="p-4 md:p-6">
+    <>
+      <div className="p-0 sm:p-4 md:p-6">
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
           <motion.div
             initial={{ opacity: 0, y: 18 }}
@@ -342,24 +356,32 @@ export default function MarkAttendance() {
             transition={{ duration: 0.35 }}
             className="xl:col-span-4 dark-card rounded-[2rem] overflow-hidden"
           >
-            <div className="relative p-8 text-white">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600" />
-              <div className="absolute -top-20 -right-20 h-52 w-52 rounded-full bg-white/15 blur-3xl" />
+            <div className="relative p-6 sm:p-8 text-white min-h-[320px] sm:min-h-[360px] flex flex-col justify-end items-center text-center overflow-hidden group">
+              {/* Background Video Layer */}
+              <div className="absolute inset-0 z-0">
+                <video
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="w-full h-full object-cover scale-105 group-hover:scale-100 transition-transform duration-[2000ms] ease-out"
+                >
+                  <source src="/enrollment-demo.mp4" type="video/mp4" />
+                </video>
+                {/* Dynamic Overlay Gradient */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#09101d] via-[#09101d]/60 to-transparent opacity-85" />
+                <div className="absolute inset-0 bg-primary/20 mix-blend-overlay" />
+              </div>
+
               <div className="relative z-10">
-                <div className="inline-flex rounded-2xl bg-white/20 p-3 backdrop-blur-sm border border-white/20">
-                  <QrCode className="w-6 h-6" />
-                </div>
-                <h2 className="mt-6 text-3xl font-bold leading-tight">
-                  Enrollment login with device binding.
+                <h2 className="mt-8 text-2xl sm:text-3xl font-black leading-tight tracking-tight px-4">
+                  One Device <span className="text-emerald-400">One User</span>
                 </h2>
-                <p className="mt-3 text-sm text-white/80">
-                  One enrollment stays bound to one device, and teachers can optionally gate attendance by classroom public IP rules.
-                </p>
               </div>
             </div>
 
             <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <SummaryCard
                   label="Active Classes"
                   value={activeClasses.length}
@@ -375,7 +397,7 @@ export default function MarkAttendance() {
               </div>
               <div className="rounded-2xl border border-card-border bg-muted/20 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <ShieldCheck className="w-4 h-4 text-success" />
+                  <ShieldCheck className="w-4 h-4 text-[#15803d] dark:text-success" />
                   Enrollment-to-device lock
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
@@ -389,7 +411,7 @@ export default function MarkAttendance() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.08 }}
-            className="xl:col-span-8 dark-card rounded-[2rem] p-5 md:p-6"
+            className="xl:col-span-8 dark-card rounded-[2rem] p-6 sm:p-10"
           >
             {authLoading ? (
               <div className="h-[520px] rounded-2xl bg-muted/30 animate-pulse" />
@@ -403,7 +425,7 @@ export default function MarkAttendance() {
                         "w-full rounded-xl px-4 py-2 text-sm font-bold transition-all duration-200",
                         authMode === "login"
                           ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-                          : "text-muted-foreground hover:bg-white/5",
+                          : "text-muted-foreground hover:bg-muted/20",
                       )}
                     >
                       Student Login
@@ -414,7 +436,7 @@ export default function MarkAttendance() {
                         "w-full rounded-xl px-4 py-2 text-sm font-bold transition-all duration-200",
                         authMode === "signup"
                           ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-                          : "text-muted-foreground hover:bg-white/5",
+                          : "text-muted-foreground hover:bg-muted/20",
                       )}
                     >
                       Signup
@@ -471,7 +493,7 @@ export default function MarkAttendance() {
                         value={formPassword}
                         onChange={(event) => setFormPassword(event.target.value)}
                         className="mt-2 w-full rounded-xl border border-card-border bg-muted/60 px-4 py-3 text-sm text-foreground outline-none"
-                        placeholder="Create a strong password"
+                        placeholder={authMode === "login" ? "Enter your password" : "Create a secure password"}
                       />
                     </label>
 
@@ -534,9 +556,11 @@ export default function MarkAttendance() {
               <div className="space-y-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-2xl font-bold text-foreground">Mark Your Attendance</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Logged in as {profile.full_name} with enrollment {profile.enrollment_no}.
+                    <h3 className="text-2xl font-black text-foreground tracking-tight">
+                      Welcome, <span className="text-emerald-500">{profile.full_name}</span>
+                    </h3>
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 mt-1">
+                      Student Dashboard • {profile.enrollment_no}
                     </p>
                   </div>
                   <button
@@ -555,17 +579,21 @@ export default function MarkAttendance() {
                       <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
                         Active Class
                       </span>
-                      <select
+                      <Select
                         value={selectedClassId}
-                        onChange={(event) => setSelectedClassId(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-card-border bg-muted/60 px-4 py-3 text-sm text-foreground outline-none"
+                        onValueChange={setSelectedClassId}
                       >
-                        {activeClasses.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.code} • {item.name}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="mt-2 w-full h-12 rounded-xl border border-border bg-muted/20 px-4 text-sm font-semibold text-foreground focus:ring-primary/40 transition-all">
+                          <SelectValue placeholder="Choose a class" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl border border-border bg-card">
+                          {activeClasses.map((item) => (
+                            <SelectItem key={item.id} value={item.id} className="rounded-xl focus:bg-primary">
+                              {item.code} • {item.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </label>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -579,13 +607,15 @@ export default function MarkAttendance() {
                         Geolocation gate
                       </div>
                       {requiresLocation ? (
-                        <div className="mt-4 space-y-4">
-                          <InfoPill label="Target Radius" value={`${requiredRadius} meters`} />
-                          <GateStatus
-                            label="GPS link"
-                            matched={Boolean(location)}
-                            pending={locationLoading && !location}
-                          />
+                        <div className="mt-4 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <InfoPill label="Target Radius" value={`${requiredRadius} meters`} />
+                            <GateStatus
+                              label="GPS Link"
+                              matched={requiresLocation ? Boolean(location && locationInRadius) : Boolean(location)}
+                              pending={locationLoading && !location}
+                            />
+                          </div>
                           {location?.accuracy && (
                             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/5 border border-primary/10">
                               <div className={cn(
@@ -612,19 +642,21 @@ export default function MarkAttendance() {
 
                     <div className="rounded-2xl border border-card-border bg-muted/20 p-4">
                       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                        <ShieldCheck className="w-4 h-4 text-success" />
+                        <ShieldCheck className="w-4 h-4 text-[#15803d] dark:text-success" />
                         Network gate
                       </div>
                       {requiresPublicIpMatch ? (
-                        <div className="mt-4 space-y-4">
-                          <InfoPill label="Required Public IP" value={requiredWifiPublicIp ?? "Not set"} />
-                          <GateStatus
-                            label="Public IP match"
-                            matched={Boolean(currentIp) && wifiIpMatches}
-                            pending={!currentIp}
-                          />
+                        <div className="mt-4 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <InfoPill label="Required Public IP" value={requiredWifiPublicIp ?? "Not set"} />
+                            <GateStatus
+                              label="Public IP Match"
+                              matched={Boolean(currentIp) && wifiIpMatches}
+                              pending={!currentIp}
+                            />
+                          </div>
                           <p className="text-xs text-muted-foreground text-[10px] leading-tight opacity-70">
-                            Attendance tabhi mark hogi jab current public IP teacher ke configured class IP se match karegi.
+                            Attendance can only be marked when your current public IP matches the teacher's configured classroom IP.
                           </p>
                         </div>
                       ) : (
@@ -633,108 +665,6 @@ export default function MarkAttendance() {
                         </p>
                       )}
                     </div>
-
-                    {latestSession?.session.quizEnabled && !quizResult ? (
-                      <div className="space-y-6">
-                         {!isQuizzing ? (
-                           <div className="py-8 text-center space-y-4 rounded-2xl border-2 border-dashed border-primary/20 bg-primary/5">
-                             <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                               <HelpCircle className="w-8 h-8" />
-                             </div>
-                             <div>
-                               <h3 className="text-xl font-bold text-foreground">Attendance Quiz Required</h3>
-                               <p className="text-xs text-muted-foreground max-w-[280px] mx-auto mt-2">
-                                 Your teacher has enabled a quiz gate for this session. Complete the assessment to verify your presence.
-                               </p>
-                             </div>
-                             <div className="px-6 pb-2">
-                               <button
-                                 onClick={() => setIsQuizzing(true)}
-                                 disabled={!canMarkAttendance}
-                                 className="w-full rounded-xl bg-primary px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 disabled:opacity-50"
-                               >
-                                 Start Assessment
-                               </button>
-                               {!canMarkAttendance && (
-                                 <p className="text-[10px] text-destructive mt-3 font-bold uppercase tracking-widest text-center">
-                                   Verify Geo/WiFi first
-                                 </p>
-                               )}
-                             </div>
-                           </div>
-                         ) : (
-                           <div className="space-y-6 py-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                             <div className="flex items-center justify-between pb-4 border-b border-card-border">
-                               <h3 className="text-lg font-bold text-foreground">Class Quiz</h3>
-                               <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">{quizAnswers.filter(a => a !== undefined).length} / {quizQuestions.length} Answered</span>
-                             </div>
-
-                             <div className="space-y-8">
-                               {quizQuestions.map((q, qIdx) => (
-                                 <div key={qIdx} className="space-y-4">
-                                   <div className="flex gap-3">
-                                     <span className="shrink-0 w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{qIdx + 1}</span>
-                                     <h4 className="text-sm font-bold text-foreground leading-relaxed">
-                                       {q.question_text}
-                                     </h4>
-                                   </div>
-                                   <div className="grid grid-cols-1 gap-2.5 pl-9">
-                                     {q.options.map((opt, oIdx) => (
-                                       <button
-                                         key={oIdx}
-                                         onClick={() => {
-                                           const newAnsw = [...quizAnswers];
-                                           newAnsw[qIdx] = oIdx;
-                                           setQuizAnswers(newAnsw);
-                                         }}
-                                         className={cn(
-                                           "w-full text-left px-5 py-3.5 rounded-xl border text-sm transition-all duration-300",
-                                           quizAnswers[qIdx] === oIdx
-                                             ? "bg-primary border-primary text-primary-foreground shadow-lg shadow-primary/20"
-                                             : "bg-muted/40 border-card-border text-muted-foreground hover:bg-muted/60"
-                                         )}
-                                       >
-                                         {opt}
-                                       </button>
-                                     ))}
-                                   </div>
-                                 </div>
-                               ))}
-                             </div>
-
-                             <button
-                               onClick={() => quizMutation.mutate()}
-                               disabled={quizAnswers.length < quizQuestions.length || quizMutation.isPending}
-                               className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 px-6 py-4 text-sm font-bold text-white shadow-xl shadow-emerald-500/20 disabled:opacity-50 mt-4 h-14"
-                             >
-                               {quizMutation.isPending ? "Submitting Assessment..." : "Complete & Mark Attendance"}
-                             </button>
-                           </div>
-                         )}
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {quizResult && (
-                          <div className="p-6 rounded-2xl bg-success/10 border border-success/20 text-center animate-in zoom-in-95 duration-500">
-                             <div className="w-12 h-12 rounded-full bg-success/20 flex items-center justify-center text-success mx-auto mb-3">
-                               <CheckCircle2 className="w-6 h-6" />
-                             </div>
-                             <div className="text-[10px] uppercase font-black tracking-widest text-success/80 mb-1">Assessment Complete</div>
-                             <div className="text-4xl font-black text-foreground tracking-tight">
-                               {quizResult.score} / {quizResult.maxScore}
-                             </div>
-                             <p className="text-xs text-muted-foreground mt-2">Your attendance has been automatically verified.</p>
-                          </div>
-                        )}
-                        <button
-                          onClick={() => markMutation.mutate()}
-                          disabled={markMutation.isPending || !canMarkAttendance || Boolean(quizResult)}
-                          className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 px-4 py-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60 h-14"
-                        >
-                          {markMutation.isPending ? "Submitting..." : quizResult ? "Attendance Marked" : "Finalize Attendance"}
-                        </button>
-                      </div>
-                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -772,7 +702,107 @@ export default function MarkAttendance() {
                         </div>
                       </div>
                     )}
+                    {latestSession?.session.quizEnabled && !quizResult ? (
+                      <div className="space-y-6">
+                        {!isQuizzing ? (
+                          <div className="py-8 text-center space-y-4 rounded-2xl border-2 border-dashed border-primary/20 bg-primary/5">
+                            <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                              <HelpCircle className="w-8 h-8" />
+                            </div>
+                            <div>
+                              <h3 className="text-xl font-bold text-foreground">Attendance Quiz Required</h3>
+                              <p className="text-xs text-muted-foreground max-w-[280px] mx-auto mt-2">
+                                Your teacher has enabled a quiz gate for this session. Complete the assessment to verify your presence.
+                              </p>
+                            </div>
+                            <div className="px-6 pb-2">
+                              <button
+                                onClick={() => setIsQuizzing(true)}
+                                disabled={!canMarkAttendance}
+                                className="w-full rounded-xl bg-primary px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 disabled:opacity-50"
+                              >
+                                Start Assessment
+                              </button>
+                              {!canMarkAttendance && (
+                                <p className="text-[10px] text-destructive mt-3 font-bold uppercase tracking-widest text-center">
+                                  Verify Geo/WiFi first
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-6 py-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="flex items-center justify-between pb-4 border-b border-card-border">
+                              <h3 className="text-lg font-bold text-foreground">Class Quiz</h3>
+                              <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">{quizAnswers.filter(a => a !== undefined).length} / {quizQuestions.length} Answered</span>
+                            </div>
 
+                            <div className="space-y-8">
+                              {quizQuestions.map((q, qIdx) => (
+                                <div key={qIdx} className="space-y-4">
+                                  <div className="flex gap-3">
+                                    <span className="shrink-0 w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">{qIdx + 1}</span>
+                                    <h4 className="text-sm font-bold text-foreground leading-relaxed">
+                                      {q.question_text}
+                                    </h4>
+                                  </div>
+                                  <div className="grid grid-cols-1 gap-2.5 pl-9">
+                                    {q.options.map((opt, oIdx) => (
+                                      <button
+                                        key={oIdx}
+                                        onClick={() => {
+                                          const newAnsw = [...quizAnswers];
+                                          newAnsw[qIdx] = oIdx;
+                                          setQuizAnswers(newAnsw);
+                                        }}
+                                        className={cn(
+                                          "w-full text-left px-5 py-3.5 rounded-xl border text-sm transition-all duration-300",
+                                          quizAnswers[qIdx] === oIdx
+                                            ? "bg-primary border-primary text-primary-foreground shadow-lg shadow-primary/20"
+                                            : "bg-muted/40 border-card-border text-muted-foreground hover:bg-muted/60"
+                                        )}
+                                      >
+                                        {opt}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            <button
+                              onClick={() => quizMutation.mutate()}
+                              disabled={quizAnswers.length < quizQuestions.length || quizMutation.isPending}
+                              className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 px-6 py-4 text-sm font-bold text-white shadow-xl shadow-emerald-500/20 disabled:opacity-50 mt-4 h-14"
+                            >
+                              {quizMutation.isPending ? "Submitting Assessment..." : "Complete & Mark Attendance"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {quizResult && (
+                          <div className="p-6 rounded-2xl bg-success/10 border border-success/20 text-center animate-in zoom-in-95 duration-500">
+                            <div className="w-12 h-12 rounded-full bg-success/20 flex items-center justify-center text-[#15803d] dark:text-success mx-auto mb-3">
+                              <CheckCircle2 className="w-6 h-6" />
+                            </div>
+                            <div className="text-[10px] uppercase font-black tracking-widest text-[#15803d] dark:text-success/80 mb-1">Assessment Complete</div>
+                            <div className="text-4xl font-black text-foreground tracking-tight">
+                              {quizResult.score} / {quizResult.maxScore}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">Your attendance has been automatically verified.</p>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => markMutation.mutate()}
+                          disabled={markMutation.isPending || !canMarkAttendance || Boolean(quizResult)}
+                          className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-600 px-4 py-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60 h-14"
+                        >
+                          {markMutation.isPending ? "Submitting..." : quizResult ? "Attendance Marked" : "Finalize Attendance"}
+                        </button>
+                      </div>
+                    )}
 
                   </div>
                 </div>
@@ -781,7 +811,7 @@ export default function MarkAttendance() {
           </motion.div>
         </div>
       </div>
-    </AppLayout>
+    </>
   );
 }
 
@@ -797,12 +827,16 @@ function SummaryCard({
   tone: string;
 }) {
   return (
-    <div className="rounded-2xl border border-card-border bg-muted/20 p-4">
-      <div className={cn("inline-flex rounded-xl bg-background p-2.5", tone)}>
-        <Icon className="w-4 h-4" />
+    <div className="rounded-2xl border border-border bg-card p-4 flex flex-col justify-between group hover:border-primary/20 transition-all">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">
+          {label}
+        </div>
+        <Icon className={cn("w-4 h-4", tone)} />
       </div>
-      <div className="mt-4 text-lg md:text-xl font-bold text-foreground tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">{value}</div>
-      <div className="text-xs text-muted-foreground mt-1">{label}</div>
+      <div className="mt-4 text-2xl font-black text-foreground tracking-tight truncate leading-none">
+        {value}
+      </div>
     </div>
   );
 }
@@ -819,7 +853,7 @@ function InfoPill({
       <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
-      <div className="mt-1 text-sm font-semibold text-foreground truncate">{value}</div>
+      <div className="mt-2 text-sm font-bold text-foreground truncate">{value}</div>
     </div>
   );
 }
@@ -854,9 +888,9 @@ function GateStatus({
   pending?: boolean;
 }) {
   const tone = pending
-    ? "bg-warning/15 text-warning"
+    ? "bg-warning/15 text-[#92400e] dark:text-warning"
     : matched
-      ? "bg-success/15 text-success"
+      ? "bg-success/15 text-[#15803d] dark:text-success"
       : "bg-destructive/15 text-destructive";
 
   return (

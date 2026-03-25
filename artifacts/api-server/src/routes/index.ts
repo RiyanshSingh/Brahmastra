@@ -5,8 +5,11 @@ import classesRoutes from "./classes";
 import reportsRoutes from "./reports";
 import analyticsRoutes from "./analytics";
 
+import authRoutes from "./auth";
+
 const routes: RouteDefinition[] = [
   ...healthRoutes,
+  ...authRoutes,
   ...dashboardRoutes,
   ...classesRoutes,
   ...reportsRoutes,

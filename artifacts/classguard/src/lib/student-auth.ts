@@ -18,7 +18,7 @@ export type StudentProfile = {
   updated_at: string;
 };
 
-const STUDENT_EMAIL_DOMAIN = "student.classguard.app";
+const STUDENT_EMAIL_DOMAIN = "student.brahmastra.app";
 
 function normalizeEnrollment(enrollment: string): string {
   return enrollment.trim().toUpperCase();

@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { useDashboardStats } from "@/hooks/use-dashboard-data";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function StatCards() {
   const { data, isLoading } = useDashboardStats();
@@ -11,7 +12,7 @@ export function StatCards() {
       <StatCard 
         title="Verified Present" 
         value={data?.verifiedPresent.toLocaleString()} 
-        icon={<CheckCircle2 className="w-5 h-5 text-success" />}
+        icon={<CheckCircle2 className={cn("w-5 h-5", isLoading ? "text-[#15803d] dark:text-success" : "text-black")} />}
         trend="+12%"
         isLoading={isLoading}
         delay={0.4}
@@ -20,7 +21,7 @@ export function StatCards() {
       <StatCard 
         title="Flagged Today" 
         value={data?.flaggedToday.toString()} 
-        icon={<AlertTriangle className="w-5 h-5 text-warning" />}
+        icon={<AlertTriangle className={cn("w-5 h-5", isLoading ? "text-[#92400e] dark:text-warning" : "text-black")} />}
         trend="-3%"
         trendDown
         isLoading={isLoading}
@@ -37,31 +38,39 @@ function StatCard({ title, value, icon, trend, trendDown, isLoading, delay, colo
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.5, delay }}
-      className="dark-card rounded-[2rem] p-6 transition-all duration-300"
+      className={cn(
+        "dark-card rounded-[2.5rem] p-6 transition-all duration-300 shadow-sm flex flex-col items-center justify-center text-center relative",
+        color === 'warning' ? "border-amber-500/10" : "border-green-500/10"
+      )}
+      style={{
+        backgroundColor: color === 'warning' ? '#E59832' : (color === 'success' ? '#22c55e' : undefined),
+      }}
     >
-      <div className="flex justify-between items-start mb-4">
+      <div className={cn(
+        "flex flex-col items-center gap-3",
+        "pt-2"
+      )}>
         <div className={cn(
-          "p-3 rounded-2xl",
-          color === 'success' ? "bg-success/10" : "bg-warning/10"
+          "p-3.5 rounded-3xl",
+          "bg-white/20 shadow-xl"
         )}>
           {icon}
         </div>
-        <div className={cn(
-          "px-2.5 py-1 rounded-full text-xs font-bold",
-          trendDown ? "bg-success/10 text-success" : "bg-success/10 text-success" 
-          // Note: Assuming both examples are good trends, adjust logic as needed
-        )}>
-          {trend}
+        
+        <div className="flex flex-col items-center">
+          <h4 className={cn(
+            "font-black uppercase tracking-[0.25em] mb-1",
+            "text-black/50 text-[13px]"
+          )}>{title}</h4>
+          {isLoading ? (
+            <Skeleton className="h-10 w-32 mx-auto rounded-xl bg-black/10" />
+          ) : (
+            <div className={cn(
+              "font-black tracking-[calc(-0.02em)] leading-none",
+              "text-black text-[40px]"
+            )}>{value}</div>
+          )}
         </div>
-      </div>
-      
-      <div>
-        <h4 className="text-sm font-medium text-muted-foreground mb-1">{title}</h4>
-        {isLoading ? (
-          <div className="h-8 bg-muted rounded w-24 animate-pulse"></div>
-        ) : (
-          <div className="text-3xl font-bold text-foreground">{value}</div>
-        )}
       </div>
     </motion.div>
   );

@@ -11,39 +11,37 @@ import { RecentStudents } from "@/components/dashboard/RecentStudents";
 
 export default function Dashboard() {
   return (
-    <AppLayout title="Dashboard">
-      <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-          {/* Left Column */}
-          <div className="col-span-1 md:col-span-12 lg:col-span-3 flex flex-col gap-5">
-            <div className="h-[210px]">
-              <HighlightCard />
-            </div>
-            <div className="h-[210px]">
-              <TotalStudentsCard />
-            </div>
-            <div className="flex-1 min-h-[260px]">
-              <LiveSessionCard />
-            </div>
+    <div className="p-6">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+        {/* Left Column */}
+        <div className="col-span-1 md:col-span-12 lg:col-span-3 flex flex-col gap-5">
+          <div className="h-[210px]">
+            <HighlightCard />
           </div>
-
-          {/* Middle Column */}
-          <div className="col-span-1 md:col-span-12 lg:col-span-6 flex flex-col gap-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <ScoreCard />
-              <StatCards />
-            </div>
-            <SessionsChart />
-            <AttendanceBreakdown />
+          <div className="h-[210px]">
+            <TotalStudentsCard />
           </div>
-
-          {/* Right Column */}
-          <div className="col-span-1 md:col-span-12 lg:col-span-3 flex flex-col gap-5">
-            <ActivityCalendar />
-            <RecentStudents />
+          <div className="flex-1 min-h-[260px]">
+            <LiveSessionCard />
           </div>
         </div>
+
+        {/* Middle Column */}
+        <div className="col-span-1 md:col-span-12 lg:col-span-6 flex flex-col gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <ScoreCard />
+            <StatCards />
+          </div>
+          <SessionsChart />
+          <AttendanceBreakdown />
+        </div>
+
+        {/* Right Column */}
+        <div className="col-span-1 md:col-span-12 lg:col-span-3 flex flex-col gap-5">
+          <ActivityCalendar />
+          <RecentStudents />
+        </div>
       </div>
-    </AppLayout>
+    </div>
   );
 }

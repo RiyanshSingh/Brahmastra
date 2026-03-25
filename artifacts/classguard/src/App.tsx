@@ -9,6 +9,7 @@ import Reports from "@/pages/Reports";
 import Analytics from "@/pages/Analytics";
 import MarkAttendance from "@/pages/MarkAttendance";
 import NotFound from "@/pages/not-found";
+import { AppLayout } from "@/components/layout/AppLayout";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,14 +22,16 @@ const queryClient = new QueryClient({
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/classes" component={Classes} />
-      <Route path="/reports" component={Reports} />
-      <Route path="/analytics" component={Analytics} />
-      <Route path="/mark-attendance" component={MarkAttendance} />
-      <Route component={NotFound} />
-    </Switch>
+    <AppLayout>
+      <Switch>
+        <Route path="/" component={MarkAttendance} />
+        <Route path="/dashboard" component={Dashboard} />
+        <Route path="/classes" component={Classes} />
+        <Route path="/reports" component={Reports} />
+        <Route path="/analytics" component={Analytics} />
+        <Route component={NotFound} />
+      </Switch>
+    </AppLayout>
   );
 }
 

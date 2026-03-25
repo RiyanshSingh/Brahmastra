@@ -860,3 +860,27 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION public.submit_quiz_and_mark_attendance(uuid, uuid, integer[], text, float8, float8) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.upsert_quiz(uuid, text, jsonb) TO authenticated;
+
+-- Teacher/Admin Authentication
+create table if not exists public.admin_auth (
+  id uuid primary key default gen_random_uuid(),
+  username text unique not null,
+  password_plaintext text not null,
+  created_at timestamptz not null default now()
+);
+
+-- Initial Credential for Teacher
+insert into public.admin_auth (username, password_plaintext)
+values ('RIYANSH', 'RIYANSH@2928')
+on conflict (username) do update set password_plaintext = excluded.password_plaintext;
+
+-- Enable RLS to protect from direct frontend exploitation
+ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.attendance_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.attendance_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.attendance_student_marks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.attendance_rechecks ENABLE ROW LEVEL SECURITY;
+
+-- Note: No policies are added, so by default ALL access is blocked 
+-- for anonymous and authenticated users. The API-Server uses 
+-- the service_role key to manage data securely.

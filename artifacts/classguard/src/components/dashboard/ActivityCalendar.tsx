@@ -1,67 +1,107 @@
-import { motion } from "framer-motion";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { 
+  format, 
+  addMonths, 
+  subMonths, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfWeek, 
+  endOfWeek, 
+  isSameMonth, 
+  isSameDay, 
+  eachDayOfInterval,
+  isToday
+} from "date-fns";
 import { cn } from "@/lib/utils";
 
 const DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
-const DATES = Array.from({ length: 35 }, (_, i) => {
-  const day = i - 2;
-  if (day <= 0) return { date: 30 + day, current: false };
-  if (day > 31) return { date: day - 31, current: false };
-  let activity = null;
-  if ([4, 12, 18, 25].includes(day)) activity = 'high';
-  else if ([7, 14, 21, 28].includes(day)) activity = 'medium';
-  else if ([2, 9, 16, 23].includes(day)) activity = 'low';
-  return { date: day, current: true, activity, isToday: day === 18 };
-});
 
 export function ActivityCalendar() {
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(monthStart);
+  const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
+  const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
+
+  const calendarDays = eachDayOfInterval({
+    start: startDate,
+    end: endDate,
+  });
+
+  const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
+  const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
+
+  // Simulated activity logic based on date
+  const getActivity = (day: Date) => {
+    const d = day.getDate();
+    if (!isSameMonth(day, monthStart)) return null;
+    if ([4, 12, 18, 25].includes(d)) return 'high';
+    if ([7, 14, 21, 28].includes(d)) return 'medium';
+    if ([2, 9, 16, 23].includes(d)) return 'low';
+    return null;
+  };
+
   return (
     <motion.div 
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.5, delay: 0.6 }}
-      className="dark-card rounded-[2rem] p-6"
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5 }}
+      className="dark-card rounded-[2rem] px-6 py-6 border border-border bg-gradient-to-br from-card/80 to-card/40 backdrop-blur-xl shadow-2xl"
     >
       <div className="flex items-center justify-between mb-6">
-        <h3 className="font-semibold text-lg text-foreground">October 2024</h3>
+        <div className="flex flex-col">
+          <h3 className="font-bold text-lg text-foreground tracking-tight leading-none">
+            {format(currentDate, "MMMM")}
+          </h3>
+          <p className="text-[10px] font-bold text-primary/60 uppercase tracking-widest mt-1">
+            {format(currentDate, "yyyy")} Operations
+          </p>
+        </div>
         <div className="flex gap-2">
-          <button className="p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors">
+          <button 
+            onClick={prevMonth}
+            className="p-1 rounded-lg bg-muted/20 border border-border hover:bg-white/[0.08] text-muted-foreground hover:text-foreground transition-all active:scale-95"
+          >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <button className="p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors">
+          <button 
+            onClick={nextMonth}
+            className="p-1 rounded-lg bg-muted/20 border border-border hover:bg-white/[0.08] text-muted-foreground hover:text-foreground transition-all active:scale-95"
+          >
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-y-3 mb-2">
+      <div className="grid grid-cols-7 gap-y-2 text-center">
         {DAYS.map(d => (
-          <div key={d} className="text-center text-xs font-semibold text-muted-foreground">
+          <div key={ d } className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.1em] mb-1">
             {d}
           </div>
         ))}
         
-        {DATES.map((d, i) => (
-          <div key={i} className="flex justify-center relative">
-            <div className={cn(
-              "w-8 h-8 flex items-center justify-center rounded-full text-sm transition-colors cursor-pointer",
-              !d.current && "text-muted-foreground/30",
-              d.current && !d.isToday && "text-foreground hover:bg-muted",
-              d.isToday && "bg-primary text-white font-bold shadow-md shadow-primary/30"
-            )}>
-              {d.date}
-            </div>
-            {d.activity && (
-              <div className="absolute -bottom-1 flex justify-center w-full">
-                <div className={cn(
-                  "w-1.5 h-1.5 rounded-full",
-                  d.activity === 'high' ? "bg-primary" :
-                  d.activity === 'medium' ? "bg-warning" : "bg-success"
-                )} />
+        {calendarDays.map((day, i) => {
+          const currentMonthDay = isSameMonth(day, monthStart);
+          const today = isToday(day);
+
+          return (
+            <div key={i} className="flex flex-col items-center justify-center relative py-0.5">
+              <div 
+                className={cn(
+                  "w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium transition-all duration-200 cursor-pointer relative z-10",
+                  !currentMonthDay && "text-muted-foreground/10",
+                  currentMonthDay && !today && "text-foreground/80 hover:bg-muted/20",
+                  today && "bg-primary text-white font-bold shadow-md shadow-primary/30"
+                )}
+              >
+                {format(day, "d")}
               </div>
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
     </motion.div>
   );

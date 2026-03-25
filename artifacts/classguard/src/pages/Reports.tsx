@@ -11,10 +11,17 @@ import {
 import { AppLayout } from "@/components/layout/AppLayout";
 import { cn } from "@/lib/utils";
 import { useReportsData } from "@/hooks/use-attendance-data";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const STATUS_CONFIG = {
-  present: { label: "Present", color: "text-success bg-success/15" },
-  questionable: { label: "Needs Review", color: "text-warning bg-warning/15" },
+  present: { label: "Present", color: "text-[#15803d] dark:text-success bg-success/15" },
+  questionable: { label: "Needs Review", color: "text-[#92400e] dark:text-warning bg-warning/15" },
   absent: { label: "Absent", color: "text-destructive bg-destructive/15" },
 } as const;
 
@@ -29,38 +36,37 @@ const DATE_OPTIONS = [
 export default function Reports() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [classFilter, setClassFilter] = useState("");
+  const [classFilter, setClassFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
   const { data, isLoading } = useReportsData({
     search,
     status: statusFilter,
-    classId: classFilter,
+    classId: classFilter === "all" ? "" : classFilter,
     range: dateFilter,
   });
 
   return (
-    <AppLayout title="Reports">
-      <div className="p-6">
+    <div className="p-6">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
-            { label: "Total Records", value: data?.summary.total ?? 0, icon: FileText, color: "text-primary bg-primary/15" },
-            { label: "Present", value: data?.summary.present ?? 0, icon: CheckCircle2, color: "text-success bg-success/15" },
-            { label: "Needs Review", value: data?.summary.questionable ?? 0, icon: AlertTriangle, color: "text-warning bg-warning/15" },
-            { label: "Absent", value: data?.summary.absent ?? 0, icon: XCircle, color: "text-destructive bg-destructive/15" },
+            { label: "Total Records", value: data?.summary.total ?? 0, icon: FileText, color: "bg-primary/10 text-primary border-primary/20" },
+            { label: "Present Records", value: data?.summary.present ?? 0, icon: CheckCircle2, color: "bg-success/10 text-success border-success/20" },
+            { label: "Needs Audit", value: data?.summary.questionable ?? 0, icon: AlertTriangle, color: "bg-warning/10 text-warning border-warning/20" },
+            { label: "Absent Total", value: data?.summary.absent ?? 0, icon: XCircle, color: "bg-destructive/10 text-destructive border-destructive/20" },
           ].map((item, index) => (
             <motion.div
               key={item.label}
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, delay: index * 0.06 }}
-              className="dark-card rounded-2xl p-4 flex items-center gap-4"
+              className="dark-card border border-border rounded-[1.5rem] p-5 flex items-center gap-4 group transition-all duration-300 hover:shadow-2xl hover:shadow-black/20"
             >
-              <div className={cn("p-2.5 rounded-xl", item.color)}>
-                <item.icon className="w-4 h-4" />
+              <div className={cn("p-3 rounded-2xl relative overflow-hidden shrink-0", item.color)}>
+                <item.icon className="w-5 h-5 relative z-10" />
               </div>
-              <div>
-                <div className="text-2xl font-bold text-foreground">{item.value}</div>
-                <div className="text-xs text-muted-foreground">{item.label}</div>
+              <div className="min-w-0">
+                <div className="text-3xl font-black text-foreground tracking-tight group-hover:text-primary transition-colors leading-none">{item.value}</div>
+                <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-60 mt-1 truncate">{item.label}</div>
               </div>
             </motion.div>
           ))}
@@ -97,7 +103,7 @@ export default function Reports() {
           <SelectPill
             value={classFilter}
             options={[
-              { value: "", label: "All Classes" },
+              { value: "all", label: "All Classes" },
               ...(data?.classOptions ?? []).map((option) => ({
                 value: option.id,
                 label: option.label,
@@ -119,9 +125,9 @@ export default function Reports() {
           transition={{ duration: 0.4, delay: 0.3 }}
           className="dark-card rounded-2xl overflow-hidden"
         >
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px]">
-              <thead>
+          <div className="overflow-x-auto relative max-h-[700px] overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/10 hover:scrollbar-thumb-muted-foreground/20">
+            <table className="w-full min-w-[980px] border-collapse">
+              <thead className="sticky top-0 z-20 bg-card/95 backdrop-blur-md shadow-sm">
                 <tr className="border-b border-card-border">
                   {["Student", "Roll No.", "Class", "Date", "Punch", "Reviewed", "Status", "Note"].map((column) => (
                     <th
@@ -146,19 +152,25 @@ export default function Reports() {
                   data?.records.map((row) => {
                     const status = STATUS_CONFIG[row.status];
                     return (
-                      <tr key={row.id} className="border-b border-card-border/60 hover:bg-muted/30 transition-colors">
-                        <td className="px-5 py-3.5 text-sm font-medium text-foreground">{row.student}</td>
-                        <td className="px-5 py-3.5 text-xs text-muted-foreground font-mono">{row.rollNo}</td>
-                        <td className="px-5 py-3.5 text-sm text-foreground">{row.classLabel}</td>
-                        <td className="px-5 py-3.5 text-sm text-muted-foreground">{row.date}</td>
-                        <td className="px-5 py-3.5 text-sm text-foreground">{row.checkIn}</td>
-                        <td className="px-5 py-3.5 text-sm text-muted-foreground">{row.reviewedAt ?? "Not reviewed"}</td>
-                        <td className="px-5 py-3.5">
-                          <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold", status.color)}>
+                      <tr key={row.id} className="border-b border-border hover:bg-muted/10 transition-colors group">
+                        <td className="px-5 py-4">
+                           <div className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">{row.student}</div>
+                           <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground opacity-50 mt-0.5">{row.rollNo}</div>
+                        </td>
+                        <td className="px-5 py-4 text-xs font-bold text-muted-foreground">{row.classLabel}</td>
+                        <td className="px-5 py-4 text-xs font-medium text-muted-foreground">{row.date}</td>
+                        <td className="px-5 py-4 text-xs font-mono text-foreground font-bold">{row.checkIn}</td>
+                        <td className="px-5 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{row.reviewedAt ?? "—"}</td>
+                        <td className="px-5 py-4">
+                          <span className={cn(
+                            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider border", 
+                            status.color
+                          )}>
+                            <div className={cn("w-1 h-1 rounded-full", status.color.split(' ')[0].replace('text-', 'bg-'))} />
                             {status.label}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5 text-sm text-muted-foreground">{row.note ?? "—"}</td>
+                        <td className="px-5 py-4 text-xs text-muted-foreground italic">{row.note ?? "—"}</td>
                       </tr>
                     );
                   })
@@ -175,7 +187,6 @@ export default function Reports() {
           </div>
         </motion.div>
       </div>
-    </AppLayout>
   );
 }
 
@@ -189,19 +200,21 @@ function SelectPill({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="appearance-none px-4 py-2.5 bg-muted border border-card-border rounded-xl text-sm font-medium text-foreground hover:bg-muted/80 transition-colors cursor-pointer pr-8 outline-none"
-      >
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="w-[180px] h-10 rounded-xl bg-muted border border-card-border px-4 text-sm font-medium text-foreground hover:bg-muted/80 transition-all outline-none">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="rounded-xl border border-card-border bg-card shadow-2xl">
         {options.map((option) => (
-          <option key={option.value || option.label} value={option.value}>
+          <SelectItem 
+            key={option.value || option.label} 
+            value={option.value}
+            className="rounded-lg focus:bg-primary transition-colors cursor-pointer"
+          >
             {option.label}
-          </option>
+          </SelectItem>
         ))}
-      </select>
-      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
-    </div>
+      </SelectContent>
+    </Select>
   );
 }

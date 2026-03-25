@@ -13,7 +13,7 @@ export class HttpError extends Error {
   }
 }
 
-export type HttpMethod = "GET" | "POST";
+export type HttpMethod = "GET" | "POST" | "DELETE";
 
 export interface AppRequest {
   body: unknown;
@@ -175,7 +175,7 @@ export function applyCors(
     res.setHeader("vary", "Origin");
   }
 
-  res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
+  res.setHeader("access-control-allow-methods", "GET,POST,DELETE,OPTIONS");
   res.setHeader("access-control-allow-headers", "Content-Type, Authorization");
 }
 
