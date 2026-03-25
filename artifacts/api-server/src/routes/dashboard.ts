@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { getDashboardData } from "../lib/attendance";
 import { asyncHandler } from "../lib/http";
 
@@ -6,7 +6,7 @@ const router: IRouter = Router();
 
 router.get(
   "/dashboard",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const data = await getDashboardData();
     res.json(data);
   }),
