@@ -1,7 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "node ./build.mjs && mkdir -p public",
-  "installCommand": "npm install",
+  "buildCommand": "npm install && node ./build.mjs && mkdir -p public",
   "outputDirectory": "public",
   "functions": {
     "api/[...route].js": {
