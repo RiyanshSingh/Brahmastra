@@ -32,6 +32,15 @@ app.use(cors({ origin: env.corsOrigin === "*" ? true : env.corsOrigin }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+app.get("/", (_req, res) => {
+  res.json({
+    status: "ok",
+    message: "Class-Guard API Server",
+    version: "1.0.0",
+    service: "api-server"
+  });
+});
+
 app.use("/api", router);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
