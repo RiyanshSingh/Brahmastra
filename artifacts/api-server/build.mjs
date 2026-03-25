@@ -20,14 +20,11 @@ async function buildAll() {
     ],
     platform: "node",
     bundle: true,
-    packages: "external",
     format: "esm",
     outdir: distDir,
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
-    external: [
-      "*.node",
-    ],
+    external: ["*.node"],
     sourcemap: "linked",
     // Make sure packages that are cjs only (e.g. express) but are bundled continue to work in our esm output file
     banner: {
