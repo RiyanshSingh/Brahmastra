@@ -1,4 +1,3 @@
-import { Router, type IRouter, type Request, type Response } from "express";
 import {
   createClass,
   createClassSchema,
@@ -11,72 +10,61 @@ import {
   studentMarkSchema,
   submitStudentMark,
 } from "../lib/attendance";
-import { asyncHandler } from "../lib/http";
+import type { RouteDefinition } from "../lib/http";
 
-const router: IRouter = Router();
+const classesRoutes: RouteDefinition[] = [
+  {
+    method: "GET",
+    path: "/classes",
+    handler: async (_req, res) => {
+      const data = await listClasses();
+      res.json(data);
+    },
+  },
+  {
+    method: "POST",
+    path: "/classes",
+    handler: async (req, res) => {
+      const payload = createClassSchema.parse(req.body);
+      const created = await createClass(payload);
+      res.json(created, 201);
+    },
+  },
+  {
+    method: "GET",
+    path: "/classes/:classId/latest-session",
+    handler: async (req, res) => {
+      const data = await getLatestSessionForClass(req.params.classId ?? "");
+      res.json(data);
+    },
+  },
+  {
+    method: "POST",
+    path: "/classes/:classId/sessions/import-punches",
+    handler: async (req, res) => {
+      const payload = importPunchesSchema.parse(req.body);
+      const data = await importPunchesForClass(req.params.classId ?? "", payload);
+      res.json(data, 201);
+    },
+  },
+  {
+    method: "POST",
+    path: "/sessions/:sessionId/recheck",
+    handler: async (req, res) => {
+      const payload = recheckSchema.parse(req.body);
+      const data = await saveSessionRecheck(req.params.sessionId ?? "", payload);
+      res.json(data);
+    },
+  },
+  {
+    method: "POST",
+    path: "/sessions/:sessionId/student-mark",
+    handler: async (req, res) => {
+      const payload = studentMarkSchema.parse(req.body);
+      const data = await submitStudentMark(req.params.sessionId ?? "", payload);
+      res.json(data);
+    },
+  },
+];
 
-function getRouteParam(value: string | string[] | undefined): string {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (Array.isArray(value) && value[0]) {
-    return value[0];
-  }
-
-  return "";
-}
-
-router.get(
-  "/classes",
-  asyncHandler(async (req: Request, res: Response) => {
-    const data = await listClasses();
-    res.json(data);
-  }),
-);
-
-router.post(
-  "/classes",
-  asyncHandler(async (req: Request, res: Response) => {
-    const payload = createClassSchema.parse(req.body);
-    const created = await createClass(payload);
-    res.status(201).json(created);
-  }),
-);
-
-router.get(
-  "/classes/:classId/latest-session",
-  asyncHandler(async (req: Request, res: Response) => {
-    const data = await getLatestSessionForClass(getRouteParam(req.params.classId));
-    res.json(data);
-  }),
-);
-
-router.post(
-  "/classes/:classId/sessions/import-punches",
-  asyncHandler(async (req: Request, res: Response) => {
-    const payload = importPunchesSchema.parse(req.body);
-    const data = await importPunchesForClass(getRouteParam(req.params.classId), payload);
-    res.status(201).json(data);
-  }),
-);
-
-router.post(
-  "/sessions/:sessionId/recheck",
-  asyncHandler(async (req: Request, res: Response) => {
-    const payload = recheckSchema.parse(req.body);
-    const data = await saveSessionRecheck(getRouteParam(req.params.sessionId), payload);
-    res.json(data);
-  }),
-);
-
-router.post(
-  "/sessions/:sessionId/student-mark",
-  asyncHandler(async (req: Request, res: Response) => {
-    const payload = studentMarkSchema.parse(req.body);
-    const data = await submitStudentMark(getRouteParam(req.params.sessionId), payload);
-    res.json(data);
-  }),
-);
-
-export default router;
+export default classesRoutes;

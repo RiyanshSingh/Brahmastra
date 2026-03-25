@@ -1,11 +1,15 @@
-import { Router, type IRouter, Request, Response } from "express";
 import { HealthCheckResponse } from "../shared/api-zod";
+import type { RouteDefinition } from "../lib/http";
 
-const router: IRouter = Router();
+const healthRoutes: RouteDefinition[] = [
+  {
+    method: "GET",
+    path: "/healthz",
+    handler: (_req, res) => {
+      const data = HealthCheckResponse.parse({ status: "ok" });
+      res.json(data);
+    },
+  },
+];
 
-router.get("/healthz", (_req: Request, res: Response) => {
-  const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json(data);
-});
-
-export default router;
+export default healthRoutes;

@@ -1,15 +1,15 @@
-import { Router, type IRouter, type Request, type Response } from "express";
 import { getAnalytics } from "../lib/attendance";
-import { asyncHandler } from "../lib/http";
+import type { RouteDefinition } from "../lib/http";
 
-const router: IRouter = Router();
+const analyticsRoutes: RouteDefinition[] = [
+  {
+    method: "GET",
+    path: "/analytics",
+    handler: async (_req, res) => {
+      const data = await getAnalytics();
+      res.json(data);
+    },
+  },
+];
 
-router.get(
-  "/analytics",
-  asyncHandler(async (req: Request, res: Response) => {
-    const data = await getAnalytics();
-    res.json(data);
-  }),
-);
-
-export default router;
+export default analyticsRoutes;

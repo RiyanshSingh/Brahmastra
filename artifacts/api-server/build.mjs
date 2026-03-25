@@ -24,9 +24,10 @@ async function buildAll() {
     outdir: distDir,
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
+    packages: "external",
     external: ["*.node"],
     sourcemap: "linked",
-    // Make sure packages that are cjs only (e.g. express) but are bundled continue to work in our esm output file
+    // Keep local workspace code bundled while leaving installed packages external for lean deploys.
     banner: {
       js: `import { createRequire as __bannerCrReq } from 'node:module';
 import __bannerPath from 'node:path';

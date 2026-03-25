@@ -1,16 +1,16 @@
-import { Router, type IRouter } from "express";
-import healthRouter from "./health";
-import dashboardRouter from "./dashboard";
-import classesRouter from "./classes";
-import reportsRouter from "./reports";
-import analyticsRouter from "./analytics";
+import type { RouteDefinition } from "../lib/http";
+import healthRoutes from "./health";
+import dashboardRoutes from "./dashboard";
+import classesRoutes from "./classes";
+import reportsRoutes from "./reports";
+import analyticsRoutes from "./analytics";
 
-const router: IRouter = Router();
+const routes: RouteDefinition[] = [
+  ...healthRoutes,
+  ...dashboardRoutes,
+  ...classesRoutes,
+  ...reportsRoutes,
+  ...analyticsRoutes,
+];
 
-router.use(healthRouter);
-router.use(dashboardRouter);
-router.use(classesRouter);
-router.use(reportsRouter);
-router.use(analyticsRouter);
-
-export default router;
+export default routes;
