@@ -149,17 +149,24 @@ async function getCanvasFingerprint(): Promise<string> {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) return "no-canvas";
-  canvas.width = 240;
-  canvas.height = 60;
-  ctx.textBaseline = "top";
-  ctx.font = "16px 'Inter', 'Segoe UI', Arial";
+  
+  // Use unique prime dimensions to potentially bypass some anti-fingerprinting filters
+  canvas.width = 199;
+  canvas.height = 31;
+  ctx.textBaseline = "alphabetic";
+  ctx.font = "14.5px 'Arial', sans-serif"; // Using stable fallback
   ctx.fillStyle = "#f60";
-  ctx.fillRect(125, 1, 62, 20);
+  ctx.fillRect(100, 1, 50, 20);
   ctx.fillStyle = "#069";
-  ctx.fillText("brahmastra-device-verify", 2, 15);
-  ctx.fillStyle = "rgba(102, 204, 0, 0.8)";
-  ctx.fillText("brahmastra-device-verify", 4, 17);
-  return canvas.toDataURL();
+  
+  // Add varied drawing tasks to gather more GPU/driver variance
+  ctx.fillText("brahmastra-v2-stable-id", 2, 15);
+  ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
+  ctx.beginPath();
+  ctx.arc(50, 15, 10, 0, Math.PI * 2, true);
+  ctx.fill();
+  
+  return canvas.toDataURL("image/png");
 }
 
 async function getCurrentDeviceContext(): Promise<{
@@ -173,17 +180,19 @@ async function getCurrentDeviceContext(): Promise<{
 
   const canvasId = await getCanvasFingerprint();
 
+  // STABLE HARDWARE SEED - No Browser Identifiers
   const fingerprintSeed = [
-    // Hardware & OS stability identifiers
     navigator.platform || "unknown",
     navigator.language || "en",
     String(navigator.hardwareConcurrency ?? ""),
-    String(navigator.maxTouchPoints ?? ""),
+    String(navigator.maxTouchPoints ?? 0),
     "deviceMemory" in navigator
       ? String((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? "")
       : "0",
-    `${screen.width}x${screen.height}x${screen.colorDepth}`,
-    String(window.devicePixelRatio || 1),
+    // Use physical screen specs, not window size
+    `${screen.width}x${screen.height}x${screen.colorDepth}x${screen.pixelDepth}`,
+    // Available space usually consistent across browsers on same OS/Scaling
+    `${screen.availWidth}x${screen.availHeight}`,
     Intl.DateTimeFormat().resolvedOptions().timeZone,
     canvasId,
   ].join("|");
