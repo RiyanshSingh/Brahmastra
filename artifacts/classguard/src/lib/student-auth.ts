@@ -144,6 +144,24 @@ async function sha256Hex(value: string): Promise<string> {
     .join("");
 }
 
+async function getCanvasFingerprint(): Promise<string> {
+  if (typeof document === "undefined") return "no-dom";
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "no-canvas";
+  canvas.width = 240;
+  canvas.height = 60;
+  ctx.textBaseline = "top";
+  ctx.font = "16px 'Inter', 'Segoe UI', Arial";
+  ctx.fillStyle = "#f60";
+  ctx.fillRect(125, 1, 62, 20);
+  ctx.fillStyle = "#069";
+  ctx.fillText("brahmastra-device-verify", 2, 15);
+  ctx.fillStyle = "rgba(102, 204, 0, 0.8)";
+  ctx.fillText("brahmastra-device-verify", 4, 17);
+  return canvas.toDataURL();
+}
+
 async function getCurrentDeviceContext(): Promise<{
   currentIp: string | null;
   deviceFingerprint: string;
@@ -152,19 +170,22 @@ async function getCurrentDeviceContext(): Promise<{
   const currentIpResult = await Promise.allSettled([fetchPublicIp()]);
   const currentIp =
     currentIpResult[0]?.status === "fulfilled" ? currentIpResult[0].value : null;
-  const deviceMemory =
-    "deviceMemory" in navigator
-      ? String((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? "")
-      : "";
+
+  const canvasId = await getCanvasFingerprint();
 
   const fingerprintSeed = [
-    navigator.userAgent,
-    navigator.language,
-    navigator.platform,
-    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    // Hardware & OS stability identifiers
+    navigator.platform || "unknown",
+    navigator.language || "en",
     String(navigator.hardwareConcurrency ?? ""),
     String(navigator.maxTouchPoints ?? ""),
-    deviceMemory,
+    "deviceMemory" in navigator
+      ? String((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? "")
+      : "0",
+    `${screen.width}x${screen.height}x${screen.colorDepth}`,
+    String(window.devicePixelRatio || 1),
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    canvasId,
   ].join("|");
 
   const deviceFingerprint = await sha256Hex(fingerprintSeed);
