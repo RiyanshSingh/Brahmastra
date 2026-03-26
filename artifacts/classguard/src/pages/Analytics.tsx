@@ -42,7 +42,6 @@ export default function Analytics() {
   const { data, isLoading } = useAnalyticsData();
 
   return (
-    <AppLayout title="Analytics">
       <div className="p-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {(data?.kpis ?? Array.from({ length: 4 }, () => null)).map((kpi, index) => {
@@ -266,6 +265,5 @@ export default function Analytics() {
           </div>
         </motion.div>
       </div>
-    </AppLayout>
   );
 }

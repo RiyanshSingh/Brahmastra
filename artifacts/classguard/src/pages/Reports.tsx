@@ -7,7 +7,9 @@ import {
   Search,
   AlertTriangle,
   XCircle,
+  Download,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { cn } from "@/lib/utils";
 import { useReportsData } from "@/hooks/use-attendance-data";
@@ -44,6 +46,39 @@ export default function Reports() {
     classId: classFilter === "all" ? "" : classFilter,
     range: dateFilter,
   });
+
+  const handleExportPresent = () => {
+    if (!data?.records) return;
+
+    // Filter only present students from current view
+    const presentRecords = data.records.filter(r => r.status === 'present');
+
+    if (presentRecords.length === 0) {
+      alert("No 'Present' records found for the current filters.");
+      return;
+    }
+
+    const exportData = presentRecords.map(r => ({
+      'Student Name': r.student,
+      'Roll No.': r.rollNo,
+      'Class': r.classLabel,
+      'Date': r.date,
+      'Punch Time': r.checkIn,
+      'Review Time': r.reviewedAt || 'N/A',
+      'Status': 'Present',
+      'Notes': r.note || ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Present Students");
+
+    // Standard filename with filters info
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `Present_Students_${dateStr}.xlsx`;
+
+    XLSX.writeFile(workbook, fileName);
+  };
 
   return (
     <div className="p-6">
@@ -113,6 +148,14 @@ export default function Reports() {
           />
 
           <SelectPill value={dateFilter} options={DATE_OPTIONS} onChange={setDateFilter} />
+
+          <button
+            onClick={handleExportPresent}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:scale-[1.03] active:scale-[0.97] transition-all shadow-lg shadow-primary/20"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download Present
+          </button>
 
           <span className="ml-auto text-xs text-muted-foreground font-medium">
             {data?.records.length ?? 0} record{(data?.records.length ?? 0) !== 1 ? "s" : ""}

@@ -1413,10 +1413,11 @@ export async function getReports(params: {
     const isMarked = markedBySessionRoll.has(`${record.session_id}:${record.roll_number.toUpperCase()}`);
     let computedStatus = normalizeStatus(record.status);
 
-    // SMARTER LOGIC: If it was generic 'absent'/'pending' but student MARKED themselves, 
-    // it MUST be flagged for Audit (Needs Review)
-    if ((computedStatus === 'absent' || record.status === 'pending') && isMarked) {
-      computedStatus = 'questionable';
+    // SMARTER LOGIC: If a student self-marked via the app (passed Quiz + Sensors), 
+    // we prioritize this as 'Present'.
+    // If they were previously 'absent' or 'pending' in the sheet, self-marking overrides it.
+    if (isMarked) {
+      computedStatus = 'present';
     }
 
     return {

@@ -375,11 +375,11 @@ export function AppSidebar({
                 <div className="mx-auto w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center mb-4">
                   <Shield className="w-6 h-6 text-primary" strokeWidth={2.5} />
                 </div>
-                <DialogTitle className="text-2xl font-black tracking-tight text-foreground">
+                <DialogTitle className="text-2xl font-black tracking-tight text-foreground dark:text-white">
                   Teachers Armor
                 </DialogTitle>
-                <DialogDescription className="text-xs font-medium text-muted-foreground uppercase tracking-widest">
-                  Authentication Required
+                <DialogDescription className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">
+                  Authentication Required • V1.2
                 </DialogDescription>
               </div>
 
@@ -428,9 +428,9 @@ export function AppSidebar({
             </div>
           </form>
           
-          <div className="bg-muted/10 p-4 text-center border-t border-border">
-            <p className="text-[10px] font-medium text-muted-foreground/40 uppercase tracking-tighter">
-              Brahmastra Security System • v1.0
+          <div className="bg-muted/30 p-4 text-center border-t border-border">
+            <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+              Brahmastra Strategic Security Framework
             </p>
           </div>
         </DialogContent>

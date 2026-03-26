@@ -46,12 +46,12 @@ import {
   type UploadedWorkbookHistoryItem,
   type QuizQuestion,
 } from "@/lib/api";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "@/components/ui/select";
 import {
   Dialog,
@@ -163,7 +163,7 @@ export default function Classes() {
       setAllowedLongitude(currentClass.allowedLongitude?.toString() ?? "");
       setAllowedRadius(currentClass.allowedRadius?.toString() ?? "");
       setQuizEnabled(currentClass.quizEnabled ?? false);
-      
+
       fetchQuiz(currentClass.id)
         .then((q) => {
           if (q) setQuizQuestions(q.questions);
@@ -203,10 +203,10 @@ export default function Classes() {
           }
         },
         null,
-        { 
+        {
           enableHighAccuracy: true,
           timeout: 10000,
-          maximumAge: 0 
+          maximumAge: 0
         },
       );
       return () => {
@@ -536,48 +536,48 @@ export default function Classes() {
             </div>
 
             <div className="relative z-10 space-y-5">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
-                    Target Class
-                  </span>
-                  <div className="flex items-center gap-4">
-                    {currentClass && (
-                      <button 
-                         onClick={() => {
-                           if (window.confirm(`Permanently delete ${currentClass.code}? All history will be lost.`)) {
-                             deleteClassMutation.mutate(currentClass.id);
-                           }
-                         }}
-                         className="text-[10px] font-bold text-destructive hover:underline uppercase tracking-widest flex items-center gap-1 transition-all"
-                      >
-                         <Trash2 className="w-3 h-3" />
-                         Delete Course
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => setIsCreateClassOpen(true)}
-                      className="text-[10px] font-bold text-primary hover:underline uppercase tracking-widest flex items-center gap-1 transition-all"
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
+                  Target Class
+                </span>
+                <div className="flex items-center gap-4">
+                  {currentClass && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Permanently delete ${currentClass.code}? All history will be lost.`)) {
+                          deleteClassMutation.mutate(currentClass.id);
+                        }
+                      }}
+                      className="text-[10px] font-bold text-destructive hover:underline uppercase tracking-widest flex items-center gap-1 transition-all"
                     >
-                      <PlusCircle className="w-3 h-3" />
-                      New Class
+                      <Trash2 className="w-3 h-3" />
+                      Delete Course
                     </button>
-                  </div>
+                  )}
+                  <button
+                    onClick={() => setIsCreateClassOpen(true)}
+                    className="text-[10px] font-bold text-primary hover:underline uppercase tracking-widest flex items-center gap-1 transition-all"
+                  >
+                    <PlusCircle className="w-3 h-3" />
+                    New Class
+                  </button>
                 </div>
-                <Select
-                  value={selectedClassId}
-                  onValueChange={setSelectedClassId}
-                >
-                  <SelectTrigger className="w-full h-14 rounded-2xl border border-border bg-muted/20 backdrop-blur-md px-4 text-sm text-foreground focus:ring-primary/40 focus:bg-muted/30 transition-all">
-                    <SelectValue placeholder="Select a class" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-2xl border border-border bg-card">
-                    {classes.map((item) => (
-                      <SelectItem key={item.id} value={item.id} className="rounded-xl focus:bg-primary">
-                        {item.code} • {item.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              </div>
+              <Select
+                value={selectedClassId}
+                onValueChange={setSelectedClassId}
+              >
+                <SelectTrigger className="w-full h-14 rounded-2xl border border-border bg-muted/20 backdrop-blur-md px-4 text-sm text-foreground focus:ring-primary/40 focus:bg-muted/30 transition-all">
+                  <SelectValue placeholder="Select a class" />
+                </SelectTrigger>
+                <SelectContent className="rounded-2xl border border-border bg-card">
+                  {classes.map((item) => (
+                    <SelectItem key={item.id} value={item.id} className="rounded-xl focus:bg-primary">
+                      {item.code} • {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               <div className="space-y-2">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
@@ -716,11 +716,11 @@ export default function Classes() {
                           placeholder="Enrollment #"
                         />
                       </div>
-                        <button
-                          onClick={() => resetDeviceMutation.mutate()}
-                          disabled={resetDeviceMutation.isPending || !resetEnrollmentNo.trim()}
-                          className="w-full rounded-xl bg-amber-600 dark:bg-amber-500/10 border border-amber-600/20 py-3 text-xs font-bold text-white dark:text-amber-500 hover:bg-amber-700 dark:hover:bg-amber-500 dark:hover:text-white transition-all duration-300 shadow-lg shadow-amber-600/10 dark:shadow-none disabled:opacity-40 disabled:cursor-not-allowed uppercase tracking-widest"
-                        >
+                      <button
+                        onClick={() => resetDeviceMutation.mutate()}
+                        disabled={resetDeviceMutation.isPending || !resetEnrollmentNo.trim()}
+                        className="w-full rounded-xl bg-amber-600 dark:bg-amber-500/10 border border-amber-600/20 py-3 text-xs font-bold text-white dark:text-amber-500 hover:bg-amber-700 dark:hover:bg-amber-500 dark:hover:text-white transition-all duration-300 shadow-lg shadow-amber-600/10 dark:shadow-none disabled:opacity-40 disabled:cursor-not-allowed uppercase tracking-widest"
+                      >
                         {resetDeviceMutation.isPending ? "Resetting..." : "Unlock Device Binding"}
                       </button>
                     </div>
@@ -766,12 +766,12 @@ export default function Classes() {
 
             <div className="flex-1 overflow-y-auto max-h-[520px] scrollbar-thin scrollbar-thumb-muted-foreground/10 hover:scrollbar-thumb-muted-foreground/20">
               {!currentClass ? (
-                 <div className="p-10 text-center">
-                   <div className="w-12 h-12 rounded-2xl bg-muted/10 flex items-center justify-center mx-auto mb-4">
-                     <FileSpreadsheet className="w-6 h-6 text-muted-foreground/30" />
-                   </div>
-                   <p className="text-xs font-bold text-foreground opacity-60">Select a class first</p>
-                 </div>
+                <div className="p-10 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-muted/10 flex items-center justify-center mx-auto mb-4">
+                    <FileSpreadsheet className="w-6 h-6 text-muted-foreground/30" />
+                  </div>
+                  <p className="text-xs font-bold text-foreground opacity-60">Select a class first</p>
+                </div>
               ) : isUploadHistoryLoading ? (
                 <div className="p-5 space-y-3">
                   {Array.from({ length: 3 }).map((_, index) => (
@@ -806,18 +806,18 @@ export default function Classes() {
 
             {currentClass && uploadHistory.length > 0 && (
               <div className="p-4 bg-muted/5 border-t border-card-border">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`Clear all?`)) {
-                        clearHistoryMutation.mutate();
-                      }
-                    }}
-                    disabled={clearHistoryMutation.isPending}
-                    className="w-full rounded-xl border border-destructive/20 bg-destructive/10 py-2.5 text-[10px] font-black uppercase tracking-widest text-destructive transition-all hover:bg-destructive hover:text-white disabled:opacity-40"
-                  >
-                    {clearHistoryMutation.isPending ? "Clearing..." : "Clear Upload History"}
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`Clear all?`)) {
+                      clearHistoryMutation.mutate();
+                    }
+                  }}
+                  disabled={clearHistoryMutation.isPending}
+                  className="w-full rounded-xl border border-destructive/20 bg-destructive/10 py-2.5 text-[10px] font-black uppercase tracking-widest text-destructive transition-all hover:bg-destructive hover:text-white disabled:opacity-40"
+                >
+                  {clearHistoryMutation.isPending ? "Clearing..." : "Clear Upload History"}
+                </button>
               </div>
             )}
           </motion.div>
@@ -862,7 +862,7 @@ export default function Classes() {
           ) : (
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="space-y-6">
-                 <div className="space-y-2">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
                       Visual Coordinates Pick
@@ -871,7 +871,7 @@ export default function Classes() {
                       <MapIcon className="w-2.5 h-2.5" /> Interactive Map
                     </div>
                   </div>
-                  <MapPicker 
+                  <MapPicker
                     lat={allowedLatitude ? parseFloat(allowedLatitude) : null}
                     lng={allowedLongitude ? parseFloat(allowedLongitude) : null}
                     radius={parseInt(allowedRadius) || 100}
@@ -948,28 +948,123 @@ export default function Classes() {
                   </div>
                 </div>
 
-                <div className="space-y-4 pt-4 border-t border-border">
-                  <div className="flex items-center justify-between p-4 rounded-2xl bg-primary/5 border border-primary/10 transition-all">
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    onClick={() => networkMutation.mutate()}
+                    disabled={networkMutation.isPending}
+                    className="flex-1 rounded-2xl bg-gradient-to-r from-primary to-indigo-600 px-6 py-4 text-sm font-bold text-white shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                  >
+                    {networkMutation.isPending ? "Updating rules..." : "Authorize Boundary Rules"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAllowedWifiPublicIp("");
+                      setAllowedLatitude("");
+                      setAllowedLongitude("");
+                      setAllowedRadius("");
+                    }}
+                    type="button"
+                    className="px-6 py-4 rounded-2xl bg-muted/20 border border-border text-sm font-bold text-foreground hover:bg-muted/30 transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="rounded-[1.5rem] bg-gradient-to-br from-white/[0.05] to-transparent border border-border p-6">
+                  <div className="flex items-center gap-3 mb-5">
+                    <div className="p-2 rounded-lg bg-success/10 text-[#15803d] dark:text-success">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <span className="text-sm font-bold text-foreground tracking-tight">Active Sensor Feedback</span>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-2xl bg-muted/40 border border-border/60 group/ip-helper transition-colors hover:bg-muted/60">
+                      <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-70 mb-2">My Network IP</div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-mono text-foreground font-bold truncate">
+                          {detectedPublicIp || "Detecting..."}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => detectedPublicIp && setAllowedWifiPublicIp(detectedPublicIp)}
+                          disabled={!detectedPublicIp}
+                          className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-[10px] font-black text-primary uppercase tracking-wider hover:bg-primary hover:text-white transition-all disabled:opacity-30"
+                        >
+                          Auto-Fill
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-muted/40 border border-border/60 group/loc-helper transition-colors hover:bg-muted/60">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-70">My Current Location</div>
+                        {detectedLocation?.accuracy && (
+                          <div className={cn(
+                            "text-[8px] font-black uppercase px-2 py-0.5 rounded-full",
+                            detectedLocation.accuracy < 20 ? "bg-success/20 text-[#15803d] dark:text-success" : "bg-warning/20 text-[#92400e] dark:text-warning"
+                          )}>
+                            Accurate to {detectedLocation.accuracy.toFixed(0)}m
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-mono text-foreground font-bold truncate">
+                          {detectedLocation ? `${detectedLocation.lat.toFixed(6)}, ${detectedLocation.lng.toFixed(6)}` : "Fetching GPS..."}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (detectedLocation) {
+                              setAllowedLatitude(detectedLocation.lat.toString());
+                              setAllowedLongitude(detectedLocation.lng.toString());
+                              if (!allowedRadius) setAllowedRadius("100");
+                            }
+                          }}
+                          disabled={!detectedLocation}
+                          className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-[10px] font-black text-primary uppercase tracking-wider hover:bg-primary hover:text-white transition-all disabled:opacity-30"
+                        >
+                          Auto-Fill
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className="w-3.5 h-3.5 text-blue-400" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400">Match Logic</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        If boundary rules are set, students can mark attendance only when their Public IP matches and they are within the GPS Radius of the classroom.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[1.5rem] bg-gradient-to-br from-primary/5 to-transparent border border-border p-6">
+                  <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-xl bg-primary/10 text-primary">
                         <HelpCircle className="w-5 h-5" />
                       </div>
                       <div>
                         <span className="text-sm font-bold text-foreground block">Quiz-Gated Attendance</span>
-                        <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Extra Verification</span>
+                        <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest opacity-60">Extra Verification</span>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => setQuizEnabled(!quizEnabled)}
                       className={cn(
-                        "relative w-11 h-6 rounded-full transition-colors duration-200 outline-none",
-                        quizEnabled ? "bg-primary" : "bg-muted/30"
+                        "relative w-11 h-6 rounded-full transition-all duration-300 outline-none p-1 shadow-inner",
+                        quizEnabled ? "bg-primary" : "bg-slate-200 dark:bg-muted/30"
                       )}
                     >
                       <div className={cn(
-                        "absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-200 transform shadow-sm",
-                        quizEnabled ? "left-6" : "left-1"
+                        "w-4 h-4 rounded-full bg-white transition-all duration-300 transform shadow-md shadow-black/10",
+                        quizEnabled ? "translate-x-5" : "translate-x-0"
                       )} />
                     </button>
                   </div>
@@ -981,14 +1076,14 @@ export default function Classes() {
                       className="space-y-4"
                     >
                       <div className="flex items-center justify-between mb-2">
-                         <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">Quiz Questions ({quizQuestions.length})</span>
-                         <button
-                           type="button"
-                           onClick={() => setQuizQuestions([...quizQuestions, { question_text: "", options: ["", ""], correct_option_index: 0 }])}
-                           className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline"
-                         >
-                           <Plus className="w-3 h-3" /> Add Question
-                         </button>
+                        <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">Quiz Questions ({quizQuestions.length})</span>
+                        <button
+                          type="button"
+                          onClick={() => setQuizQuestions([...quizQuestions, { question_text: "", options: ["", ""], correct_option_index: 0 }])}
+                          className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline"
+                        >
+                          <Plus className="w-3 h-3" /> Add Question
+                        </button>
                       </div>
 
                       <div className="space-y-4">
@@ -1001,7 +1096,7 @@ export default function Classes() {
                             >
                               <X className="w-4 h-4" />
                             </button>
-                            
+
                             <div className="flex gap-4">
                               <span className="shrink-0 w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-bold text-primary">{qIdx + 1}</span>
                               <input
@@ -1018,11 +1113,11 @@ export default function Classes() {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-12">
                               {Array.from({ length: 4 }).map((_, oIdx) => (
-                                <div 
-                                  key={oIdx} 
+                                <div
+                                  key={oIdx}
                                   className={cn(
                                     "flex items-center gap-3 p-3 rounded-xl border transition-all",
-                                    q.correct_option_index === oIdx ? "bg-primary/10 border-primary/30" : "bg-black/20 border-border"
+                                    q.correct_option_index === oIdx ? "bg-primary/10 border-primary/30" : "bg-muted/40 border-border"
                                   )}
                                 >
                                   <button
@@ -1059,101 +1154,6 @@ export default function Classes() {
                       </div>
                     </motion.div>
                   )}
-                </div>
-
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    onClick={() => networkMutation.mutate()}
-                    disabled={networkMutation.isPending}
-                    className="flex-1 rounded-2xl bg-gradient-to-r from-primary to-indigo-600 px-6 py-4 text-sm font-bold text-white shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
-                  >
-                    {networkMutation.isPending ? "Updating rules..." : "Authorize Boundary Rules"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setAllowedWifiPublicIp("");
-                      setAllowedLatitude("");
-                      setAllowedLongitude("");
-                      setAllowedRadius("");
-                    }}
-                    type="button"
-                    className="px-6 py-4 rounded-2xl bg-muted/20 border border-border text-sm font-bold text-foreground hover:bg-muted/30 transition-colors"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div className="rounded-[1.5rem] bg-gradient-to-br from-white/[0.05] to-transparent border border-border p-6">
-                  <div className="flex items-center gap-3 mb-5">
-                    <div className="p-2 rounded-lg bg-success/10 text-[#15803d] dark:text-success">
-                      <ShieldCheck className="w-5 h-5" />
-                    </div>
-                    <span className="text-sm font-bold text-foreground tracking-tight">Active Sensor Feedback</span>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-black/20 border border-border group/ip-helper">
-                      <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-60 mb-2">My Network IP</div>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-sm font-mono text-foreground font-bold truncate">
-                          {detectedPublicIp || "Detecting..."}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => detectedPublicIp && setAllowedWifiPublicIp(detectedPublicIp)}
-                          disabled={!detectedPublicIp}
-                          className="px-3 py-1.5 rounded-lg bg-muted/20 border border-border text-[10px] font-bold text-primary uppercase tracking-wider hover:bg-primary hover:text-white transition-all disabled:opacity-30"
-                        >
-                          Auto-Fill
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-black/20 border border-border group/loc-helper">
-                      <div className="flex justify-between items-center mb-2">
-                        <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-60">My Current Location</div>
-                        {detectedLocation?.accuracy && (
-                          <div className={cn(
-                            "text-[8px] font-black uppercase px-2 py-0.5 rounded-full",
-                            detectedLocation.accuracy < 20 ? "bg-success/20 text-[#15803d] dark:text-success" : "bg-warning/20 text-[#92400e] dark:text-warning"
-                          )}>
-                             Accurate to {detectedLocation.accuracy.toFixed(0)}m
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-sm font-mono text-foreground font-bold truncate">
-                          {detectedLocation ? `${detectedLocation.lat.toFixed(6)}, ${detectedLocation.lng.toFixed(6)}` : "Fetching GPS..."}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (detectedLocation) {
-                              setAllowedLatitude(detectedLocation.lat.toString());
-                              setAllowedLongitude(detectedLocation.lng.toString());
-                              if (!allowedRadius) setAllowedRadius("100");
-                            }
-                          }}
-                          disabled={!detectedLocation}
-                          className="px-3 py-1.5 rounded-lg bg-muted/20 border border-border text-[10px] font-bold text-primary uppercase tracking-wider hover:bg-primary hover:text-white transition-all disabled:opacity-30"
-                        >
-                          Auto-Fill
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className="w-3.5 h-3.5 text-blue-400" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400">Match Logic</span>
-                      </div>
-                      <p className="text-[11px] leading-relaxed text-muted-foreground">
-                        If boundary rules are set, students can mark attendance only when their **Public IP** matches and they are within the **GPS Radius** of the classroom.
-                      </p>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1365,7 +1365,7 @@ export default function Classes() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Class Code (e.g. CS101)</Label>
-                <Input 
+                <Input
                   value={newClassCode}
                   onChange={(e) => setNewClassCode(e.target.value.toUpperCase())}
                   className="h-12 rounded-2xl bg-muted/20 border-border focus:ring-1 focus:ring-primary/40"
@@ -1374,7 +1374,7 @@ export default function Classes() {
               </div>
               <div className="space-y-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Class Name</Label>
-                <Input 
+                <Input
                   value={newClassName}
                   onChange={(e) => setNewClassName(e.target.value)}
                   className="h-12 rounded-2xl bg-muted/20 border-border focus:ring-1 focus:ring-primary/40"
@@ -1383,7 +1383,7 @@ export default function Classes() {
               </div>
             </div>
 
-            <Button 
+            <Button
               onClick={() => createClassMutation.mutate()}
               disabled={createClassMutation.isPending}
               className="w-full h-12 rounded-2xl bg-primary font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
@@ -1526,7 +1526,7 @@ function UploadHistoryCard({
 
       <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-2">
         <HistoryMetric label="Session Date" value={item.sessionDate} />
-        <HistoryMetric label="Imported Rows" value={item.uploadCount} />
+        <HistoryMetric label="Rows Count" value={item.uploadCount} />
         <HistoryMetric
           label="Last Update"
           value={new Date(item.updatedAt).toLocaleDateString()}
@@ -1556,11 +1556,11 @@ function HistoryMetric({
   value: string | number;
 }) {
   return (
-    <div className="rounded-xl bg-black/20 border border-border p-2.5 sm:p-3">
-      <div className="text-[8px] sm:text-[9px] uppercase font-black tracking-widest text-muted-foreground opacity-50">
+    <div className="rounded-xl bg-muted/40 border border-border/60 p-2.5 sm:p-3 transition-colors hover:bg-muted/60">
+      <div className="text-[8px] sm:text-[9px] uppercase font-bold tracking-widest text-muted-foreground opacity-70">
         {label}
       </div>
-      <div className="mt-1 text-[11px] sm:text-xs font-bold text-foreground leading-tight">{value}</div>
+      <div className="mt-1 text-[11px] sm:text-xs font-black text-foreground leading-tight">{value}</div>
     </div>
   );
 }

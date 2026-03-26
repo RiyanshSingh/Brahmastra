@@ -245,21 +245,21 @@ export function AppLayout({ children, title, subtitle, action }: AppLayoutProps)
                 <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/20 flex items-center justify-center mb-6 shadow-2xl shadow-primary/10">
                   <Shield className="w-7 h-7 text-primary" strokeWidth={2.5} />
                 </div>
-                <DialogTitle className="text-3xl font-black tracking-tight text-white leading-none">
+                <DialogTitle className="text-3xl font-black tracking-tight text-foreground dark:text-white leading-none">
                   Teachers Armor
                 </DialogTitle>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] opacity-60 pt-1">
-                  Secure Access • v1.2
+                <p className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-[0.3em] pt-2">
+                  SECURE ACCESS • V1.2
                 </p>
               </div>
 
               <div className="space-y-5">
                 <div className="space-y-2.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50 ml-1">
+                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70 ml-1">
                     Administrator ID
                   </Label>
                   <div className="relative group">
-                    <User className="absolute left-4.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground/30 group-focus-within:text-primary transition-colors" />
+                    <User className="absolute left-4.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground/50 group-focus-within:text-primary transition-colors" />
                     <Input
                       placeholder="Enter ID"
                       className="pl-13 h-14 rounded-2xl bg-muted/20 border-border focus:ring-1 focus:ring-primary/40 focus:bg-muted/30 transition-all text-sm font-medium"
@@ -271,11 +271,11 @@ export function AppLayout({ children, title, subtitle, action }: AppLayoutProps)
                 </div>
 
                 <div className="space-y-2.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50 ml-1">
+                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70 ml-1">
                     Access Password
                   </Label>
                   <div className="relative group">
-                    <KeyRound className="absolute left-4.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground/30 group-focus-within:text-primary transition-colors" />
+                    <KeyRound className="absolute left-4.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground/50 group-focus-within:text-primary transition-colors" />
                     <Input
                       type="password"
                       placeholder="••••••••"
@@ -298,8 +298,8 @@ export function AppLayout({ children, title, subtitle, action }: AppLayoutProps)
             </div>
           </form>
           
-          <div className="bg-muted/10 p-5 text-center border-t border-border">
-            <p className="text-[10px] font-bold text-muted-foreground/20 uppercase tracking-tighter">
+          <div className="bg-muted/30 p-5 text-center border-t border-border">
+            <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
               Brahmastra Strategic Security Framework
             </p>
           </div>
