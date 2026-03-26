@@ -15,11 +15,13 @@ import {
   isToday
 } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useMonthlyActivity } from "@/hooks/use-dashboard-data";
 
 const DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
 export function ActivityCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const { data: activity = {} } = useMonthlyActivity(currentDate);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
@@ -34,14 +36,11 @@ export function ActivityCalendar() {
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
 
-  // Simulated activity logic based on date
+  // Live activity logic based on database
   const getActivity = (day: Date) => {
-    const d = day.getDate();
     if (!isSameMonth(day, monthStart)) return null;
-    if ([4, 12, 18, 25].includes(d)) return 'high';
-    if ([7, 14, 21, 28].includes(d)) return 'medium';
-    if ([2, 9, 16, 23].includes(d)) return 'low';
-    return null;
+    const dateStr = format(day, "yyyy-MM-dd");
+    return activity[dateStr] || null;
   };
 
   return (
@@ -86,9 +85,10 @@ export function ActivityCalendar() {
         {calendarDays.map((day, i) => {
           const currentMonthDay = isSameMonth(day, monthStart);
           const today = isToday(day);
+          const dayActivity = getActivity(day);
 
           return (
-            <div key={i} className="flex flex-col items-center justify-center relative py-0.5">
+            <div key={i} className="flex flex-col items-center justify-center relative py-1">
               <div 
                 className={cn(
                   "w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium transition-all duration-200 cursor-pointer relative z-10",
@@ -98,6 +98,15 @@ export function ActivityCalendar() {
                 )}
               >
                 {format(day, "d")}
+                
+                {/* Visual activity indicator within/around the date */}
+                {dayActivity && !today && (
+                  <div className={cn(
+                    "absolute -bottom-0.5 w-1 h-1 rounded-full",
+                    dayActivity === 'high' ? "bg-primary shadow-[0_0_8px_rgba(124,58,237,0.6)]" : 
+                    dayActivity === 'medium' ? "bg-primary/60" : "bg-primary/30"
+                  )} />
+                )}
               </div>
             </div>
           );

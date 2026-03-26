@@ -19,6 +19,7 @@ export function useLatestSessionData(classId: string | null) {
     queryKey: ["classes", "latest-session", classId],
     queryFn: () => getLatestSession(classId as string),
     enabled: Boolean(classId),
+    refetchInterval: 5000,
   });
 }
 

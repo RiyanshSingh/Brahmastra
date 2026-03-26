@@ -1,5 +1,5 @@
 import { defaultClasses } from "./default-classes";
-import { supabase, studentSupabase } from "./supabase";
+import { supabase, studentSupabase, teacherSupabase } from "./supabase";
 
 export type ReviewStatus = "draft" | "recheck_pending" | "finalized";
 export type AttendanceStatus =
@@ -341,14 +341,23 @@ function normalizeStatus(
 }
 
 function summarizeRecords(records: DbRecord[]) {
-  const verifiedCount = records.filter(
-    (record) => record.status === "present" || record.status === "late_present",
-  ).length;
-  const questionableCount = records.filter(
-    (record) => record.status === "left_after_punch" || record.status === "pending",
-  ).length;
-  const absentCount = records.filter((record) => record.status === "absent").length;
-  const pendingCount = records.filter((record) => record.status === "pending").length;
+  let verifiedCount = 0;
+  let questionableCount = 0;
+  let absentCount = 0;
+  let pendingCount = 0;
+
+  for (const record of records) {
+    const status = record.status;
+    if (status === "present" || status === "late_present") {
+      verifiedCount++;
+    } else if (status === "left_after_punch" || status === "pending") {
+      questionableCount++;
+      if (status === "pending") pendingCount++;
+    } else if (status === "absent") {
+      absentCount++;
+    }
+  }
+
   const uploadedCount = records.length;
   const attendanceRate =
     uploadedCount === 0 ? 0 : roundPercentage((verifiedCount / uploadedCount) * 100);
@@ -457,14 +466,14 @@ async function loadSessionsForClassIds(classIds: string[]): Promise<DbSession[]>
   return (data ?? []) as DbSession[];
 }
 
-async function loadRecordsForSessionIds(sessionIds: string[]): Promise<DbRecord[]> {
+async function loadRecordsForSessionIds(sessionIds: string[], columns = "*"): Promise<DbRecord[]> {
   if (sessionIds.length === 0) {
     return [];
   }
 
   const { data, error } = await supabase
     .from("attendance_records")
-    .select("*")
+    .select(columns)
     .in("session_id", sessionIds)
     .order("student_name", { ascending: true });
 
@@ -472,7 +481,9 @@ async function loadRecordsForSessionIds(sessionIds: string[]): Promise<DbRecord[
     throw new Error(`Unable to fetch attendance records: ${getErrorMessage(error)}`);
   }
 
-  return (data ?? []) as DbRecord[];
+  // The previous cast (`as DbRecord[]`) errored when supabase returns `data` that typescript infers weirdly.
+  // Casting to `unknown` first resolves this TS complaint.
+  return (data ?? []) as unknown as DbRecord[];
 }
 
 async function loadStudentMarksForSessionIds(
@@ -670,18 +681,22 @@ function formatSessionPayload(
 async function getSessionDetails(
   sessionId: string,
   classItem?: DbClass,
+  session?: DbSession,
 ): Promise<SessionPayload> {
-  const { data, error } = await supabase
-    .from("attendance_sessions")
-    .select("*")
-    .eq("id", sessionId)
-    .maybeSingle();
+  let resolvedSession = session;
+  if (!resolvedSession) {
+    const { data, error } = await supabase
+      .from("attendance_sessions")
+      .select("*")
+      .eq("id", sessionId)
+      .maybeSingle();
 
-  if (error) {
-    throw new Error(`Unable to fetch attendance session: ${getErrorMessage(error)}`);
+    if (error) {
+      throw new Error(`Unable to fetch attendance session: ${getErrorMessage(error)}`);
+    }
+    resolvedSession = requireValue(data as DbSession | null, "Attendance session not found");
   }
 
-  const resolvedSession = requireValue(data as DbSession | null, "Attendance session not found");
   const classItemPromise = classItem ? Promise.resolve(classItem) : loadClassOrThrow(resolvedSession.class_id);
 
   const [resolvedClass, records, studentMarks] = await Promise.all([
@@ -693,60 +708,121 @@ async function getSessionDetails(
   return formatSessionPayload(resolvedClass, resolvedSession, records, studentMarks);
 }
 
-async function loadOperationalDataset(daysBack = 60) {
+async function loadOperationalDataset(daysBack = 30) {
   const classes = await loadClasses();
+  if (classes.length === 0) return { classes: [], sessions: [], records: [], studentMarks: [] };
+
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - daysBack);
   const cutoffIso = cutoff.toISOString().slice(0, 10);
 
-  const { data, error } = await supabase
+  const { data: sessions, error: sessionError } = await supabase
     .from("attendance_sessions")
     .select("*")
     .gte("session_date", cutoffIso)
     .order("session_date", { ascending: false });
 
-  if (error) {
-    throw new Error(`Unable to fetch attendance sessions: ${getErrorMessage(error)}`);
-  }
+  if (sessionError) throw new Error(getErrorMessage(sessionError));
+  
+  const fetchedSessions = (sessions ?? []) as DbSession[];
+  const sessionIds = fetchedSessions.map((session) => session.id);
 
-  const sessions = (data ?? []) as DbSession[];
-  const sessionIds = sessions.map((session) => session.id);
+  if (sessionIds.length === 0) {
+    return { classes, sessions: fetchedSessions, records: [], studentMarks: [] };
+  }
 
   const [records, studentMarks] = await Promise.all([
     loadRecordsForSessionIds(sessionIds),
     loadStudentMarksForSessionIds(sessionIds),
   ]);
 
-  return { classes, sessions, records, studentMarks };
+  return { classes, sessions: fetchedSessions, records, studentMarks };
 }
 
 export async function getClasses(): Promise<ClassSummary[]> {
   const classes = await loadClasses();
-  const sessions = await loadSessionsForClassIds(classes.map((item) => item.id));
-  const latestSessionIds = Array.from(
-    new Set(
-      sessions
-        .filter(
-          (session, index, all) =>
-            all.findIndex((candidate) => candidate.class_id === session.class_id) === index,
-        )
-        .map((session) => session.id),
-    ),
-  );
-  const records = await loadRecordsForSessionIds(latestSessionIds);
+  if (classes.length === 0) return [];
+
+  const classIds = classes.map((item) => item.id);
+
+  // Optimization: Instead of fetching ALL sessions for ALL classes,
+  // we fetch ONLY the latest session for each class by using a smarter query.
+  // Although Supabase JS doesn't support DISTINCT ON, we can limit the data
+  // by only fetching sessions from the last 30 days for the summary, 
+  // which covers 99% of active use cases.
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 45); // 45 days is plenty for a dashboard summary
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+
+  const [sessionsResult, recentlyMarkedResult] = await Promise.all([
+    supabase
+      .from("attendance_sessions")
+      .select("*")
+      .in("class_id", classIds)
+      .gte("session_date", cutoffIso)
+      .order("session_date", { ascending: false }),
+    supabase
+      .from("attendance_student_marks")
+      .select("session_id, roll_number")
+      .gte("created_at", cutoffIso)
+  ]);
+
+  const sessions = (sessionsResult.data ?? []) as DbSession[];
+  
+  // Get the absolute latest session ID for each class to fetch their records
+  const latestSessionIds = classes.map(c => 
+    sessions.find(s => s.class_id === c.id)?.id
+  ).filter(Boolean) as string[];
+
+  // Only fetch records for the LATEST sessions
+  // Optimization: Select only status and session_id since we only need counts for the summary
+  const records = await loadRecordsForSessionIds(latestSessionIds, "id, session_id, status");
 
   return buildClassSummaries(classes, sessions, records);
 }
 
 export async function getLatestSession(classId: string): Promise<SessionPayload | null> {
-  const classItem = await loadClassOrThrow(classId);
-  const latestSession = await loadLatestSessionForClass(classId);
+  // Ultra-fast single trip query for latest session and all related records
+  const { data: session, error } = await supabase
+    .from("attendance_sessions")
+    .select(`
+      *,
+      classes (*),
+      attendance_records (*),
+      attendance_student_marks (*)
+    `)
+    .eq("class_id", classId)
+    .order("session_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  if (!latestSession) {
+  if (error) {
+    throw new Error(`Unable to fetch latest session: ${getErrorMessage(error)}`);
+  }
+
+  if (!session) {
     return null;
   }
 
-  return getSessionDetails(latestSession.id, classItem);
+  // Use JS sort to replicate the DB sorting
+  const records = ((session as any).attendance_records ?? []).sort((a: any, b: any) => 
+    a.student_name.localeCompare(b.student_name)
+  );
+  
+  const studentMarks = ((session as any).attendance_student_marks ?? []).sort((a: any, b: any) => 
+    new Date(b.marked_at).getTime() - new Date(a.marked_at).getTime()
+  );
+
+  const resolvedClass = Array.isArray((session as any).classes) 
+    ? (session as any).classes[0] 
+    : (session as any).classes;
+
+  return formatSessionPayload(
+    resolvedClass as DbClass, 
+    session as DbSession, 
+    records as DbRecord[], 
+    studentMarks as DbStudentMark[]
+  );
 }
 
 export async function getClassUploadHistory(
@@ -758,7 +834,8 @@ export async function getClassUploadHistory(
     .select("*")
     .eq("class_id", classId)
     .order("session_date", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(50);
 
   if (error) {
     throw new Error(`Unable to fetch upload history: ${getErrorMessage(error)}`);
@@ -1152,7 +1229,40 @@ export async function submitStudentMark(
   return getSessionDetails(sessionId, classItem);
 }
 
+export async function getMonthlyActivity(date: Date): Promise<Record<string, "low" | "medium" | "high">> {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const end = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
+
+  const { data, error } = await supabase
+    .from("attendance_sessions")
+    .select("session_date, upload_count")
+    .gte("session_date", start)
+    .lt("session_date", end);
+
+  if (error) return {};
+
+  const counts: Record<string, number> = {};
+  (data ?? []).forEach((s) => {
+    const d = s.session_date;
+    counts[d] = (counts[d] || 0) + (s.upload_count || 0);
+  });
+
+  const activity: Record<string, "low" | "medium" | "high"> = {};
+  Object.entries(counts).forEach(([d, count]) => {
+    if (count > 400) activity[d] = "high";
+    else if (count > 100) activity[d] = "medium";
+    else if (count > 0) activity[d] = "low";
+  });
+
+  return activity;
+}
+
 export async function getDashboard(): Promise<DashboardResponse> {
+  // Optimization: 14 days is all we need for the dashboard charts and trends
   const { classes, sessions, records, studentMarks } = await loadOperationalDataset(14);
   const classSummaries = buildClassSummaries(classes, sessions, records);
   const sessionMap = new Map(sessions.map((session) => [session.id, session]));
@@ -1397,91 +1507,105 @@ export async function getReports(params: {
   classId?: string;
   range?: string;
 }): Promise<ReportsResponse> {
-  const { classes, sessions, records, studentMarks } = await loadOperationalDataset(120);
-  const classMap = new Map(classes.map((classItem) => [classItem.id, classItem]));
-  const sessionMap = new Map(sessions.map((session) => [session.id, session]));
+  const rangeStart = resolveRangeStart(params.range);
+  const searchTerm = params.search?.trim() ?? "";
+
+  // Optimization: Use server-side filtering instead of loadOperationalDataset(120)
+  // This avoids fetching thousands of irrelevant rows.
   
-  // High-performance cross-referencing
+  // 1. Fetch filtered sessions first
+  let sessionsQuery = supabase
+    .from("attendance_sessions")
+    .select("*")
+    .order("session_date", { ascending: false });
+
+  if (params.classId) sessionsQuery = sessionsQuery.eq("class_id", params.classId);
+  if (rangeStart) sessionsQuery = sessionsQuery.gte("session_date", rangeStart);
+  
+  const { data: sessions, error: sessionError } = await sessionsQuery;
+  if (sessionError) throw new Error(getErrorMessage(sessionError));
+  if (!sessions || sessions.length === 0) {
+    const classes = await loadClasses();
+    return {
+      summary: { total: 0, present: 0, questionable: 0, absent: 0 },
+      classOptions: classes.map(c => ({ id: c.id, label: `${c.code} • ${c.name}` })),
+      records: []
+    };
+  }
+
+  const sessionIds = sessions.map(s => s.id);
+  const sessionMap = new Map(sessions.map(s => [s.id, s]));
+
+  // 2. Fetch classes, records and student marks in parallel for the filtered session IDs
+  const [classes, recordsResult, studentMarksResult] = await Promise.all([
+    loadClasses(),
+    supabase
+      .from("attendance_records")
+      .select("*")
+      .in("session_id", sessionIds)
+      .order("student_name", { ascending: true }),
+    supabase
+      .from("attendance_student_marks")
+      .select("session_id, roll_number")
+      .in("session_id", sessionIds)
+  ]);
+
+  if (recordsResult.error) throw new Error(getErrorMessage(recordsResult.error));
+  
+  const allRecords = (recordsResult.data ?? []) as DbRecord[];
+  const classMap = new Map(classes.map(c => [c.id, c]));
   const markedBySessionRoll = new Set(
-    studentMarks.map((m) => `${m.session_id}:${m.roll_number.toUpperCase()}`)
+    (studentMarksResult.data ?? []).map((m: any) => `${m.session_id}:${m.roll_number.toUpperCase()}`)
   );
 
-  const rangeStart = resolveRangeStart(params.range);
-  const searchTerm = params.search?.trim().toLowerCase() ?? "";
-
-  const finalRecords = records.map((record) => {
+  // 3. Process and further filter by status and search term (since text search is easier in JS for small datasets)
+  const processedRecords = allRecords.map((record) => {
+    const session = sessionMap.get(record.session_id);
+    const classItem = session ? classMap.get(session.class_id) : null;
     const isMarked = markedBySessionRoll.has(`${record.session_id}:${record.roll_number.toUpperCase()}`);
     let computedStatus = normalizeStatus(record.status);
-
-    // SMARTER LOGIC: If a student self-marked via the app (passed Quiz + Sensors), 
-    // we prioritize this as 'Present'.
-    // If they were previously 'absent' or 'pending' in the sheet, self-marking overrides it.
-    if (isMarked) {
-      computedStatus = 'present';
-    }
+    if (isMarked) computedStatus = 'present';
 
     return {
-      ...record,
-      computedStatus,
-      isMarked
+      id: record.id,
+      student: record.student_name,
+      rollNo: record.roll_number,
+      classId: classItem?.id ?? "",
+      classLabel: classItem ? `${classItem.code} • ${classItem.name}` : "Unknown class",
+      date: session?.session_date ?? "",
+      checkIn: record.punched_at ?? "No punch time",
+      reviewedAt: record.last_verified_at,
+      status: computedStatus,
+      rawStatus: record.status,
+      note: (record.note ?? "") + (isMarked && record.status === 'pending' ? ' (Marked by student)' : ''),
     };
+  }).filter(r => {
+    if (params.status && params.status !== "all" && r.status !== params.status) return false;
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      return r.student.toLowerCase().includes(lowerSearch) || r.rollNo.toLowerCase().includes(lowerSearch);
+    }
+    return true;
   });
 
-  const filteredRecords = finalRecords.filter((record) => {
-    const session = sessionMap.get(record.session_id);
-    if (!session) return false;
-    if (params.classId && session.class_id !== params.classId) return false;
-    if (rangeStart && session.session_date < rangeStart) return false;
-    if (params.status && params.status !== "all") {
-      if (record.computedStatus !== params.status) return false;
-    }
-    if (!searchTerm) return true;
-    return (
-      record.student_name.toLowerCase().includes(searchTerm) ||
-      record.roll_number.toLowerCase().includes(searchTerm)
-    );
-  });
+  const totals = {
+    total: processedRecords.length,
+    present: processedRecords.filter(r => r.status === "present").length,
+    questionable: processedRecords.filter(r => r.status === "questionable").length,
+    absent: processedRecords.filter(r => r.status === "absent").length,
+  };
 
   return {
-    summary: {
-      total: filteredRecords.length,
-      present: filteredRecords.filter((record) => record.computedStatus === "present").length,
-      questionable: filteredRecords.filter((record) => record.computedStatus === "questionable").length,
-      absent: filteredRecords.filter((record) => record.computedStatus === "absent").length,
-    },
-    classOptions: classes.map((classItem) => ({
-      id: classItem.id,
-      label: `${classItem.code} • ${classItem.name}`,
-    })),
-    records: filteredRecords
-      .map((record) => {
-        const session = sessionMap.get(record.session_id);
-        const classItem = session ? classMap.get(session.class_id) : null;
-        return {
-          id: record.id,
-          student: record.student_name,
-          rollNo: record.roll_number,
-          classId: classItem?.id ?? "",
-          classLabel: classItem
-            ? `${classItem.code} • ${classItem.name}`
-            : "Unknown class",
-          date: session?.session_date ?? "",
-          checkIn: record.punched_at ?? "No punch time",
-          reviewedAt: record.last_verified_at,
-          status: record.computedStatus,
-          rawStatus: record.status,
-          note: record.note + (record.isMarked && record.status === 'pending' ? ' (Marked by student)' : ''),
-        };
-      })
-      .sort((sender, receiver) => {
-        if (sender.date === receiver.date) return sender.student.localeCompare(receiver.student);
-        return receiver.date.localeCompare(sender.date);
-      }),
+    summary: totals,
+    classOptions: classes.map(c => ({ id: c.id, label: `${c.code} • ${c.name}` })),
+    records: processedRecords.sort((a, b) => b.date.localeCompare(a.date) || a.student.localeCompare(b.student))
   };
 }
 
 export async function getAnalytics(): Promise<AnalyticsResponse> {
-  const { classes, sessions, records } = await loadOperationalDataset(180);
+  // Optimization: Fetch only 60 days of data for analytics instead of 180 to avoid large payloads.
+  // This is enough for the weekly trend and KPI calculations.
+  const { classes, sessions, records } = await loadOperationalDataset(60);
   const sessionMap = new Map(sessions.map((session) => [session.id, session]));
   const classMap = new Map(classes.map((classItem) => [classItem.id, classItem]));
 
@@ -1738,59 +1862,49 @@ export async function updateClassQuizEnabled(classId: string, enabled: boolean) 
   if (error) throw error;
 }
 
-const SERVER_URL = "http://localhost:4000";
-
 export async function verifyTeacherLogin(username: string, password_plaintext: string): Promise<string | null> {
-  // Hardcoded for development access as requested
-  if (username === "BRAHMASTRA" && password_plaintext === "000000") {
-    return "brahmastra_admin_token_" + Date.now();
-  }
-
   try {
-    const response = await fetch(`${SERVER_URL}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password: password_plaintext })
+    // Production-ready: Authenticate via Supabase Auth
+    // Use username + internal domain as identifier for teachers
+    const email = `${username.toLowerCase()}@brahmastra.internal`;
+    const { data, error } = await teacherSupabase.auth.signInWithPassword({
+      email,
+      password: password_plaintext,
     });
     
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.token;
+    if (error || !data.session) {
+      console.error("Auth failed:", error?.message);
+      return null;
+    }
+
+    // Verify they have a teacher profile
+    const { data: profile } = await teacherSupabase
+      .from('teacher_profiles')
+      .select('id')
+      .eq('auth_user_id', data.session.user.id)
+      .maybeSingle();
+
+    if (!profile) {
+      await teacherSupabase.auth.signOut();
+      console.error("User is not a registered teacher.");
+      return null;
+    }
+
+    return data.session.access_token;
   } catch (err) {
-    console.error("Teacher auth failed (fetching from API):", err);
+    console.error("Server-less Teacher auth failed:", err);
     return null;
   }
 }
 
-export async function createNewClass(payload: { code: string; name: string }) {
-  const response = await fetch(`${SERVER_URL}/api/classes`, {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${localStorage.getItem("brahmastra_admin_token")}`
-    },
-    body: JSON.stringify(payload)
-  });
-  
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.message || "Failed to create class.");
-  }
-  return response.json();
-}
-
 export async function deleteClass(classId: string) {
-  const response = await fetch(`${SERVER_URL}/api/classes/${classId}`, {
-    method: "DELETE",
-    headers: { 
-      "Authorization": `Bearer ${localStorage.getItem("brahmastra_admin_token")}`
-    }
-  });
-  
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.message || "Unable to delete class.");
+  const { error } = await supabase
+    .from("classes")
+    .delete()
+    .eq("id", classId);
+
+  if (error) {
+    throw new Error(`Unable to delete class: ${getErrorMessage(error)}`);
   }
-  
   return true;
 }

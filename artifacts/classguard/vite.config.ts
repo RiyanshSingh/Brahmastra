@@ -44,6 +44,23 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Group large vendor logic to reduce main entry size
+          'vendor-charts': ['recharts'],
+          'vendor-utils': ['xlsx', 'date-fns', 'clsx', 'tailwind-merge'],
+          'vendor-motion': ['framer-motion', 'lucide-react'],
+          'vendor-react': ['react', 'react-dom', 'wouter', '@tanstack/react-query'],
+          'vendor-ui': [
+            '@radix-ui/react-select', 
+            '@radix-ui/react-dialog', 
+            '@radix-ui/react-popover',
+            '@radix-ui/react-tooltip'
+          ]
+        }
+      }
+    }
   },
   server: {
     port,

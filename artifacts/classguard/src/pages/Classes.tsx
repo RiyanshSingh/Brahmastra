@@ -38,7 +38,7 @@ import {
   updateClassQuizEnabled,
   upsertQuiz,
   fetchQuiz,
-  createNewClass,
+  createClass,
   deleteClass,
   type AttendanceStatus,
   type ClassSummary,
@@ -448,7 +448,7 @@ export default function Classes() {
       if (!newClassCode.trim() || !newClassName.trim()) {
         throw new Error("Both Class Code and Name are required.");
       }
-      return createNewClass({ code: newClassCode, name: newClassName });
+      return createClass({ code: newClassCode, name: newClassName });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["classes"] });

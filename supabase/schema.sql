@@ -105,6 +105,15 @@ create table if not exists public.student_profiles (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.teacher_profiles (
+  id uuid primary key default gen_random_uuid(),
+  auth_user_id uuid not null unique references auth.users(id) on delete cascade,
+  username text not null unique,
+  full_name text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.student_profiles
   add column if not exists device_fingerprint text;
 

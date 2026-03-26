@@ -30,3 +30,16 @@ export const studentSupabase = createClient(
     },
   },
 );
+
+// Teacher auth client — separate instance to avoid session collisions.
+export const teacherSupabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL ?? DEFAULT_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? DEFAULT_SUPABASE_PUBLISHABLE_KEY,
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      storageKey: "cg-teacher-session",
+    },
+  },
+);

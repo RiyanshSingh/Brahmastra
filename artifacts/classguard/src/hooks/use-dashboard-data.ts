@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   getDashboard,
+  getMonthlyActivity,
   type ActiveSession,
   type DashboardStats,
   type SessionChartData,
@@ -36,5 +37,12 @@ export function useActiveSession() {
     queryKey: ["dashboard"],
     queryFn: getDashboard,
     select: (data): ActiveSession => data.activeSession,
+  });
+}
+
+export function useMonthlyActivity(date: Date) {
+  return useQuery({
+    queryKey: ["dashboard", "activity", date.getFullYear(), date.getMonth()],
+    queryFn: () => getMonthlyActivity(date),
   });
 }
