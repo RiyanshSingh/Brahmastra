@@ -368,15 +368,9 @@ export default function MarkAttendance() {
                 >
                   <source src="/enrollment-demo.mp4" type="video/mp4" />
                 </video>
-                {/* Dynamic Overlay Gradient */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#09101d] via-[#09101d]/60 to-transparent opacity-85" />
-                <div className="absolute inset-0 bg-primary/20 mix-blend-overlay" />
               </div>
 
               <div className="relative z-10">
-                <h2 className="mt-8 text-2xl sm:text-3xl font-black leading-tight tracking-tight px-4">
-                  One Device <span className="text-emerald-400">One User</span>
-                </h2>
               </div>
             </div>
 
