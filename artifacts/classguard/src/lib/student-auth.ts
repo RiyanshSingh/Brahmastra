@@ -144,29 +144,13 @@ async function sha256Hex(value: string): Promise<string> {
     .join("");
 }
 
-async function getCanvasFingerprint(): Promise<string> {
+async function getGpuIdentifier(): Promise<string> {
   if (typeof document === "undefined") return "no-dom";
   const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return "no-canvas";
-  
-  // Use unique prime dimensions to potentially bypass some anti-fingerprinting filters
-  canvas.width = 199;
-  canvas.height = 31;
-  ctx.textBaseline = "alphabetic";
-  ctx.font = "14.5px 'Arial', sans-serif"; // Using stable fallback
-  ctx.fillStyle = "#f60";
-  ctx.fillRect(100, 1, 50, 20);
-  ctx.fillStyle = "#069";
-  
-  // Add varied drawing tasks to gather more GPU/driver variance
-  ctx.fillText("brahmastra-v2-stable-id", 2, 15);
-  ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
-  ctx.beginPath();
-  ctx.arc(50, 15, 10, 0, Math.PI * 2, true);
-  ctx.fill();
-  
-  return canvas.toDataURL("image/png");
+  const gl = (canvas.getContext("webgl") || canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null;
+  if (!gl) return "no-webgl";
+  const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+  return debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "unmasked-unavailable";
 }
 
 async function getCurrentDeviceContext(): Promise<{
@@ -178,23 +162,22 @@ async function getCurrentDeviceContext(): Promise<{
   const currentIp =
     currentIpResult[0]?.status === "fulfilled" ? currentIpResult[0].value : null;
 
-  const canvasId = await getCanvasFingerprint();
+  const gpuId = await getGpuIdentifier();
 
-  // STABLE HARDWARE SEED - No Browser Identifiers
+  // STABLE HARDWARE DNA - Browser/Profile Independent
   const fingerprintSeed = [
+    // Physical hardware constants
     navigator.platform || "unknown",
-    navigator.language || "en",
     String(navigator.hardwareConcurrency ?? ""),
-    String(navigator.maxTouchPoints ?? 0),
     "deviceMemory" in navigator
       ? String((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? "")
       : "0",
-    // Use physical screen specs, not window size
+    // Screen Resolution (Absolute Monitor Specs)
     `${screen.width}x${screen.height}x${screen.colorDepth}x${screen.pixelDepth}`,
-    // Available space usually consistent across browsers on same OS/Scaling
-    `${screen.availWidth}x${screen.availHeight}`,
+    // OS Timezone
     Intl.DateTimeFormat().resolvedOptions().timeZone,
-    canvasId,
+    // GPU Identity
+    gpuId,
   ].join("|");
 
   const deviceFingerprint = await sha256Hex(fingerprintSeed);

@@ -28,7 +28,17 @@ const PageLoader = () => (
 
 // Strategic Gate: Restrict access to Chrome/Chromium only for hardware fingerprint stability
 const BrowserGuard = ({ children }: { children: React.ReactNode }) => {
-  const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+  // Strict "Chrome-Only" detection to block all spoofing/Chromium-based browsers
+  const isBrave = typeof (navigator as any).brave !== "undefined";
+  const isEdge = /Edg\//.test(navigator.userAgent);
+  const isOpera = /OPR\/|Opera\//.test(navigator.userAgent);
+  const isVivaldi = /Vivaldi/.test(navigator.userAgent);
+  const isSamsung = /SamsungBrowser/.test(navigator.userAgent);
+  
+  const isChrome = 
+    /Chrome/.test(navigator.userAgent) && 
+    /Google Inc/.test(navigator.vendor) && 
+    !isBrave && !isEdge && !isOpera && !isVivaldi && !isSamsung;
   
   if (!isChrome) {
     return (
