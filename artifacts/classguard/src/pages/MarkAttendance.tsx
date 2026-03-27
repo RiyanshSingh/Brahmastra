@@ -681,13 +681,13 @@ export default function MarkAttendance() {
                           </span>
                         </div>
                         <div className="mt-6 space-y-3 text-sm text-white/85">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4" />
-                            {selectedClass.room}
+                          <div className="flex items-center gap-2 font-medium">
+                            <MapPin className="w-4 h-4 opacity-70" />
+                            {selectedClass.room || "Room not set"}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Clock3 className="w-4 h-4" />
-                            {selectedClass.scheduleText}
+                          <div className="flex items-center gap-2 font-medium">
+                            <Clock3 className="w-4 h-4 opacity-70" />
+                            {selectedClass.scheduleText || "Schedule not set"}
                           </div>
                           <div className="flex items-center gap-2">
                             <Users className="w-4 h-4" />

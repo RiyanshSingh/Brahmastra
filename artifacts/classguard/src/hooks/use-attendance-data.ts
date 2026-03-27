@@ -11,6 +11,7 @@ export function useClassesData() {
   return useQuery({
     queryKey: ["classes"],
     queryFn: getClasses,
+    refetchInterval: 3000,
   });
 }
 

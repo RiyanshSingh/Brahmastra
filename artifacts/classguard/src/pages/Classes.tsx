@@ -142,6 +142,8 @@ export default function Classes() {
   } | null>(null);
   const [newClassCode, setNewClassCode] = useState("");
   const [newClassName, setNewClassName] = useState("");
+  const [newClassRoom, setNewClassRoom] = useState("");
+  const [newClassSchedule, setNewClassSchedule] = useState("");
   const currentClass = classes.find((item) => item.id === selectedClassId) ?? null;
 
   useEffect(() => {
@@ -489,13 +491,20 @@ export default function Classes() {
       if (!newClassCode.trim() || !newClassName.trim()) {
         throw new Error("Both Class Code and Name are required.");
       }
-      return createClass({ code: newClassCode, name: newClassName });
+      return createClass({ 
+        code: newClassCode, 
+        name: newClassName,
+        room: newClassRoom,
+        scheduleText: newClassSchedule 
+      });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["classes"] });
       setIsCreateClassOpen(false);
       setNewClassCode("");
       setNewClassName("");
+      setNewClassRoom("");
+      setNewClassSchedule("");
       toast({
         title: "Class Created",
         description: "Your new classroom has been successfully initialized in the system.",
@@ -1426,25 +1435,45 @@ export default function Classes() {
               <DialogDescription className="text-xs text-muted-foreground">Initialize a new strategic classroom.</DialogDescription>
             </div>
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Class Code (e.g. CS101)</Label>
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Class Code</Label>
                 <Input
                   value={newClassCode}
                   onChange={(e) => setNewClassCode(e.target.value.toUpperCase())}
-                  className="h-12 rounded-2xl bg-muted/20 border-border focus:ring-1 focus:ring-primary/40"
-                  placeholder="Enter code"
+                  className="h-12 rounded-2xl bg-muted/20 border-border"
+                  placeholder="CS101"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Class Name</Label>
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Room No.</Label>
                 <Input
-                  value={newClassName}
-                  onChange={(e) => setNewClassName(e.target.value)}
-                  className="h-12 rounded-2xl bg-muted/20 border-border focus:ring-1 focus:ring-primary/40"
-                  placeholder="Enter name"
+                  value={newClassRoom}
+                  onChange={(e) => setNewClassRoom(e.target.value)}
+                  className="h-12 rounded-2xl bg-muted/20 border-border"
+                  placeholder="B-204"
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Full Class Name</Label>
+              <Input
+                value={newClassName}
+                onChange={(e) => setNewClassName(e.target.value)}
+                className="h-12 rounded-2xl bg-muted/20 border-border"
+                placeholder="Software Engineering"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Timing / Schedule</Label>
+              <Input
+                value={newClassSchedule}
+                onChange={(e) => setNewClassSchedule(e.target.value)}
+                className="h-12 rounded-2xl bg-muted/20 border-border"
+                placeholder="Mon / Wed / Fri • 09:00 AM"
+              />
             </div>
 
             <Button
