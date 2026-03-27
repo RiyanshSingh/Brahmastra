@@ -460,7 +460,7 @@ export default function MarkAttendance() {
                           value={formName}
                           onChange={(event) => setFormName(event.target.value.toUpperCase())}
                           className="mt-2 w-full rounded-xl border border-card-border bg-muted/60 px-4 py-3 text-sm text-foreground outline-none"
-                          placeholder="ABHINAV SINGH CHAUHAN"
+                          placeholder="ENTER YOUR FULL NAME"
                         />
                       </label>
                     )}
@@ -474,7 +474,7 @@ export default function MarkAttendance() {
                         onChange={(event) => setFormEnrollment(event.target.value.toUpperCase())}
                         disabled={isDeviceBound}
                         className="mt-2 w-full rounded-xl border border-card-border bg-muted/60 px-4 py-3 text-sm text-foreground outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                        placeholder="0111CS231011"
+                        placeholder="ENTER YOUR ENROLLMENT NUMBER"
                       />
                     </label>
 
