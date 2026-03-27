@@ -37,7 +37,6 @@ const TEACHER_ITEMS = [
   { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { label: "Classrooms", href: "/classes", icon: BookOpen },
   { label: "Reports", href: "/reports", icon: FileText },
-  { label: "Analytics", href: "/analytics", icon: BarChart2 },
 ];
 
 interface AppLayoutProps {
@@ -52,7 +51,6 @@ const TITLE_MAP: Record<string, string> = {
   "/dashboard": "Teacher Dashboard",
   "/classes": "Classroom Management",
   "/reports": "Attendance Reports",
-  "/analytics": "Strategic Analytics",
 };
 
 export function AppLayout({ children, title, subtitle, action }: AppLayoutProps) {

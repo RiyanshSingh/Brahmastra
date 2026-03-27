@@ -10,7 +10,6 @@ import { AppLayout } from "@/components/layout/AppLayout";
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Classes = lazy(() => import("@/pages/Classes"));
 const Reports = lazy(() => import("@/pages/Reports"));
-const Analytics = lazy(() => import("@/pages/Analytics"));
 const MarkAttendance = lazy(() => import("@/pages/MarkAttendance"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
@@ -107,7 +106,6 @@ function Router() {
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/classes" component={Classes} />
           <Route path="/reports" component={Reports} />
-          <Route path="/analytics" component={Analytics} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>
