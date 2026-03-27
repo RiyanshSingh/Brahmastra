@@ -487,7 +487,7 @@ export default function MarkAttendance() {
                         value={formPassword}
                         onChange={(event) => setFormPassword(event.target.value)}
                         className="mt-2 w-full rounded-xl border border-card-border bg-muted/60 px-4 py-3 text-sm text-foreground outline-none"
-                        placeholder={authMode === "login" ? "Enter your password" : "Create a secure password"}
+                        placeholder={authMode === "login" ? "ENTER YOUR PASSWORD" : "CREATE A SECURE PASSWORD"}
                       />
                     </label>
 
