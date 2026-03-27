@@ -65,6 +65,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { getStatusLabel, parsePunchWorkbook } from "@/lib/attendance";
 import { fetchPublicIp } from "@/lib/student-auth";
 import {
@@ -123,6 +133,12 @@ export default function Classes() {
   const [draftStatuses, setDraftStatuses] = useState<Record<string, AttendanceStatus>>({});
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
   const [isCreateClassOpen, setIsCreateClassOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmDetails, setDeleteConfirmDetails] = useState<{
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  } | null>(null);
   const [newClassCode, setNewClassCode] = useState("");
   const [newClassName, setNewClassName] = useState("");
   const currentClass = classes.find((item) => item.id === selectedClassId) ?? null;
@@ -544,9 +560,12 @@ export default function Classes() {
                   {currentClass && (
                     <button
                       onClick={() => {
-                        if (window.confirm(`Permanently delete ${currentClass.code}? All history will be lost.`)) {
-                          deleteClassMutation.mutate(currentClass.id);
-                        }
+                        setDeleteConfirmDetails({
+                          title: `Permanently delete ${currentClass.code}?`,
+                          description: "All class history, student records, and attendance data will be permanently wiped from the database. This action cannot be undone.",
+                          onConfirm: () => deleteClassMutation.mutate(currentClass.id)
+                        });
+                        setDeleteConfirmOpen(true);
                       }}
                       className="text-[10px] font-bold text-destructive hover:underline uppercase tracking-widest flex items-center gap-1 transition-all"
                     >
@@ -793,11 +812,14 @@ export default function Classes() {
                       item={item}
                       compact
                       isDeleting={deleteHistoryItemMutation.isPending && deletingHistoryId === item.id}
-                      onDelete={() => {
-                        if (window.confirm(`Delete ${item.sourceFileName}?`)) {
-                          deleteHistoryItemMutation.mutate(item.id);
-                        }
-                      }}
+                        onDelete={() => {
+                          setDeleteConfirmDetails({
+                            title: `Delete ${item.sourceFileName}?`,
+                            description: "This specific Excel upload and its associated attendance recheck records will be permanently removed. This action cannot be reversed.",
+                            onConfirm: () => deleteHistoryItemMutation.mutate(item.id)
+                          });
+                          setDeleteConfirmOpen(true);
+                        }}
                     />
                   ))}
                 </div>
@@ -1393,6 +1415,39 @@ export default function Classes() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Global Deletion Confirmation Dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent className="sm:max-w-[420px] rounded-[2rem] bg-card border-border backdrop-blur-3xl p-6 sm:p-10 shadow-2xl">
+          <AlertDialogHeader className="space-y-4 text-center sm:text-center">
+            <div className="mx-auto w-16 h-16 rounded-[1.5rem] bg-destructive/10 flex items-center justify-center mb-2 shadow-2xl shadow-destructive/10 border border-destructive/20">
+              <Trash2 className="w-8 h-8 text-destructive" strokeWidth={2.5} stroke="currentColor" />
+            </div>
+            <AlertDialogTitle className="text-2xl font-black text-foreground uppercase tracking-tight">
+              {deleteConfirmDetails?.title}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm font-medium text-muted-foreground leading-relaxed px-4 text-balance">
+              {deleteConfirmDetails?.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-10 grid grid-cols-2 gap-3 sm:gap-4 sm:flex-row">
+            <AlertDialogCancel 
+              className="h-12 sm:flex-1 rounded-2xl border-border bg-muted/20 hover:bg-muted/30 text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition-all"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="h-12 sm:flex-1 rounded-2xl bg-destructive hover:bg-destructive/90 text-[10px] sm:text-[11px] font-black uppercase tracking-widest shadow-xl shadow-destructive/20 transition-all active:scale-[0.98]"
+              onClick={() => {
+                deleteConfirmDetails?.onConfirm();
+                setDeleteConfirmOpen(false);
+              }}
+            >
+              Confirm Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

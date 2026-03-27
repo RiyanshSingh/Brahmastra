@@ -406,12 +406,22 @@ function requireValue<T>(value: T | null | undefined, message: string): T {
 async function ensureDefaultClasses(): Promise<void> {
   if (!seedPromise) {
     seedPromise = (async () => {
-      const { error } = await supabase
+      const { count, error: countError } = await supabase
         .from("classes")
-        .upsert(defaultClasses, { onConflict: "code" });
+        .select("*", { count: "exact", head: true });
 
-      if (error) {
-        throw new Error(`Unable to seed classes: ${getErrorMessage(error)}`);
+      if (countError) {
+        throw new Error(`Unable to check class existence: ${getErrorMessage(countError)}`);
+      }
+
+      if (count === 0) {
+        const { error } = await supabase
+          .from("classes")
+          .upsert(defaultClasses, { onConflict: "code" });
+
+        if (error) {
+          throw new Error(`Unable to seed classes: ${getErrorMessage(error)}`);
+        }
       }
     })();
   }
@@ -420,8 +430,6 @@ async function ensureDefaultClasses(): Promise<void> {
 }
 
 async function loadClasses(): Promise<DbClass[]> {
-  await ensureDefaultClasses();
-
   const { data, error } = await supabase
     .from("classes")
     .select("*")
