@@ -32,6 +32,7 @@ import {
   clearClassUploadHistory,
   deleteUploadedWorkbook,
   importPunches,
+  initializeLiveSession,
   resetStudentDeviceBinding,
   saveSessionRecheck,
   updateClassGateways,
@@ -314,6 +315,30 @@ export default function Classes() {
     onError: (error: Error) => {
       toast({
         title: "Import failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const liveSessionMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedClassId) {
+        throw new Error("Choose a class before starting a session.");
+      }
+      return initializeLiveSession(selectedClassId, sessionDate);
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["classes"] });
+      queryClient.setQueryData(["classes", "latest-session", selectedClassId], data);
+      toast({
+        title: "Live session initialized",
+        description: `Students can now mark attendance for ${data.session.sessionDate}. You can upload the Excel sheet later to match records.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to start session",
         description: error.message,
         variant: "destructive",
       });
@@ -652,10 +677,27 @@ export default function Classes() {
 
               <button
                 onClick={() => importMutation.mutate()}
-                disabled={importMutation.isPending}
+                disabled={importMutation.isPending || liveSessionMutation.isPending}
                 className="w-full rounded-2xl bg-gradient-to-r from-primary via-indigo-600 to-primary bg-[length:200%_auto] hover:bg-right px-4 py-4 text-sm font-bold text-white shadow-xl shadow-primary/20 transition-all duration-500 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
               >
                 {importMutation.isPending ? "Processing..." : "Import & Initialize Recheck"}
+              </button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border/40" />
+                </div>
+                <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
+                  <span className="bg-[#1a1c24] px-2 text-muted-foreground/30">OR</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => liveSessionMutation.mutate()}
+                disabled={importMutation.isPending || liveSessionMutation.isPending}
+                className="w-full rounded-2xl border border-primary/30 bg-primary/5 hover:bg-primary/10 px-4 py-4 text-sm font-bold text-primary transition-all active:scale-[0.98] disabled:opacity-50"
+              >
+                {liveSessionMutation.isPending ? "Starting..." : "Start Live Session (No File)"}
               </button>
             </div>
           </motion.div>

@@ -15,9 +15,9 @@ export function AttendanceBreakdown() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.5 }}
-      className="dark-card rounded-[2rem] p-8 col-span-2 flex flex-col"
+      className="dark-card rounded-[2rem] p-5 col-span-2 flex flex-col"
     >
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center mb-4">
         <div>
           <h3 className="font-semibold text-lg text-foreground tracking-tight">Verification Analytics</h3>
           <p className="text-xs text-muted-foreground mt-1">Cross-check efficiency distribution</p>
@@ -25,7 +25,7 @@ export function AttendanceBreakdown() {
       </div>
       
       {isLoading ? (
-        <div className="grid grid-cols-3 gap-6 flex-1 items-center">
+        <div className="grid grid-cols-3 gap-4 flex-1 items-center">
           {[1, 2, 3].map(i => (
             <div key={i} className="flex flex-col items-center gap-4">
               <Skeleton className="w-24 h-24 rounded-full" />
@@ -34,7 +34,7 @@ export function AttendanceBreakdown() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-6 flex-1 items-center">
+        <div className="grid grid-cols-3 gap-4 flex-1 items-center">
           {stats.map((stat, idx) => (
             <CircularStat 
               key={idx} 
@@ -58,15 +58,15 @@ function CircularStat({ label, value, color, delay, idx }: any) {
   const gradientId = `grad-${idx}`;
 
   return (
-    <div className="flex flex-col items-center gap-4 group">
-      <div className="relative w-28 h-28 flex items-center justify-center">
+    <div className="flex flex-col items-center gap-3 group">
+      <div className="relative w-24 h-24 flex items-center justify-center">
         {/* Glow backdrop refined */}
         <div 
-          className="absolute inset-4 rounded-full blur-[28px] opacity-10 transition-all duration-500 group-hover:opacity-30 group-hover:scale-110" 
+          className="absolute inset-4 rounded-full blur-[24px] opacity-10 transition-all duration-500 group-hover:opacity-30 group-hover:scale-110" 
           style={{ backgroundColor: color }}
         />
         
-        <svg className="w-full h-full transform -rotate-90 relative z-10">
+        <svg className="w-full h-full transform -rotate-90 relative z-10" viewBox="0 0 112 112">
           <defs>
             <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor={color} />
@@ -98,7 +98,7 @@ function CircularStat({ label, value, color, delay, idx }: any) {
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center z-20">
-          <span className="text-xl font-black text-foreground tracking-tighter tabular-nums drop-shadow-sm">{value}%</span>
+          <span className="text-lg font-black text-foreground tracking-tighter tabular-nums drop-shadow-sm">{value}%</span>
         </div>
       </div>
       <div className="flex flex-col items-center gap-0.5">

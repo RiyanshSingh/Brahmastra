@@ -1015,6 +1015,35 @@ export async function resetStudentDeviceBinding(enrollmentNo: string): Promise<{
   };
 }
 
+export async function initializeLiveSession(
+  classId: string,
+  sessionDate: string
+): Promise<SessionPayload> {
+  const classItem = await loadClassOrThrow(classId);
+
+  const { data: sessionData, error: sessionError } = await supabase
+    .from("attendance_sessions")
+    .upsert(
+      {
+        class_id: classId,
+        session_date: sessionDate,
+        source_file_name: "Live Entry (File Pending)",
+        upload_count: 0,
+        review_status: "draft",
+      },
+      { onConflict: "class_id,session_date" }
+    )
+    .select("*")
+    .single();
+
+  if (sessionError) {
+    throw new Error(`Unable to initialize live session: ${getErrorMessage(sessionError)}`);
+  }
+
+  const session = requireValue(sessionData as DbSession | null, "Attendance session not found");
+  return getSessionDetails(session.id, classItem);
+}
+
 export async function importPunches(
   classId: string,
   payload: {
@@ -1058,16 +1087,12 @@ export async function importPunches(
     );
   }
 
-  const { error: deleteMarksError } = await supabase
-    .from("attendance_student_marks")
-    .delete()
-    .eq("session_id", session.id);
-
-  if (deleteMarksError) {
-    throw new Error(
-      `Unable to clear previous student marks: ${getErrorMessage(deleteMarksError)}`,
-    );
-  }
+  /* 
+     VITAL: We NO LONGER delete attendance_student_marks here.
+     This allows students to mark attendance BEFORE the excel file is uploaded.
+     When the file is finally uploaded, the student marks stay and get matched
+     against the new records.
+  */
 
   const { error: insertError } = await supabase.from("attendance_records").insert(
     rows.map((row) => ({
