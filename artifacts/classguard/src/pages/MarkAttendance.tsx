@@ -458,7 +458,7 @@ export default function MarkAttendance() {
                         </span>
                         <input
                           value={formName}
-                          onChange={(event) => setFormName(event.target.value)}
+                          onChange={(event) => setFormName(event.target.value.toUpperCase())}
                           className="mt-2 w-full rounded-xl border border-card-border bg-muted/60 px-4 py-3 text-sm text-foreground outline-none"
                           placeholder="ABHINAV SINGH CHAUHAN"
                         />
