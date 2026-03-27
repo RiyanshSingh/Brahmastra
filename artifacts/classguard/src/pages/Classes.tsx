@@ -111,7 +111,9 @@ export default function Classes() {
   const [sessionDate, setSessionDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [search, setSearch] = useState("");
-  const [reviewerName, setReviewerName] = useState("Teacher");
+  const [reviewerName, setReviewerName] = useState(() => 
+    localStorage.getItem("brahmastra_admin_name") || "Teacher"
+  );
   const [allowedWifiPublicIp, setAllowedWifiPublicIp] = useState("");
   const [allowedLatitude, setAllowedLatitude] = useState("");
   const [allowedLongitude, setAllowedLongitude] = useState("");
@@ -491,11 +493,11 @@ export default function Classes() {
       if (!newClassCode.trim() || !newClassName.trim()) {
         throw new Error("Both Class Code and Name are required.");
       }
-      return createClass({ 
-        code: newClassCode, 
+      return createClass({
+        code: newClassCode,
         name: newClassName,
         room: newClassRoom,
-        scheduleText: newClassSchedule 
+        scheduleText: newClassSchedule
       });
     },
     onSuccess: async () => {
@@ -568,29 +570,29 @@ export default function Classes() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.1 }}
-            className="dark-card relative overflow-hidden rounded-[2rem] p-6 xl:col-span-4 group"
+            className="dark-card relative overflow-hidden rounded-[1.75rem] p-5 xl:col-span-4 group"
           >
             {/* Mesh Glow */}
             <div className="absolute -top-24 -left-24 w-64 h-64 bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
 
-            <div className="relative z-10 flex items-center gap-4 mb-6">
-              <div className="p-4 rounded-[1.25rem] bg-primary/10 text-primary border border-primary/20 shadow-inner">
-                <Upload className="w-6 h-6" />
+            <div className="relative z-10 flex items-center gap-3 mb-5">
+              <div className="p-3 rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-inner">
+                <Upload className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-foreground tracking-tight">Morning Punch Import</h3>
-                <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+                <h3 className="text-lg font-bold text-foreground tracking-tight leading-tight">Morning Punch Import</h3>
+                <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
                   Load the teacher’s Excel sheet to begin.
                 </p>
               </div>
             </div>
 
-            <div className="relative z-10 space-y-5">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
+            <div className="relative z-10 space-y-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
                   Target Class
                 </span>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
                   {currentClass && (
                     <button
                       onClick={() => {
@@ -601,18 +603,18 @@ export default function Classes() {
                         });
                         setDeleteConfirmOpen(true);
                       }}
-                      className="text-[10px] font-bold text-destructive hover:underline uppercase tracking-widest flex items-center gap-1 transition-all"
+                      className="px-3 py-1.5 rounded-full bg-destructive/10 hover:bg-destructive/20 text-[11px] font-bold text-destructive flex items-center gap-1.5 transition-all active:scale-[0.95] shadow-sm shadow-destructive/5"
                     >
-                      <Trash2 className="w-3 h-3" />
-                      Delete Course
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete
                     </button>
                   )}
                   <button
                     onClick={() => setIsCreateClassOpen(true)}
-                    className="text-[10px] font-bold text-primary hover:underline uppercase tracking-widest flex items-center gap-1 transition-all"
+                    className="px-3 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 text-[11px] font-bold text-primary flex items-center gap-1.5 transition-all active:scale-[0.95] shadow-sm shadow-primary/5"
                   >
-                    <PlusCircle className="w-3 h-3" />
-                    New Class
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    New
                   </button>
                 </div>
               </div>
@@ -620,10 +622,10 @@ export default function Classes() {
                 value={selectedClassId}
                 onValueChange={setSelectedClassId}
               >
-                <SelectTrigger className="w-full h-14 rounded-2xl border border-border bg-muted/20 backdrop-blur-md px-4 text-sm text-foreground focus:ring-primary/40 focus:bg-muted/30 transition-all">
+                <SelectTrigger className="w-full h-12 rounded-xl border border-border bg-muted/20 backdrop-blur-md px-4 text-sm text-foreground focus:ring-primary/40 focus:bg-muted/30 transition-all">
                   <SelectValue placeholder="Select a class" />
                 </SelectTrigger>
-                <SelectContent className="rounded-2xl border border-border bg-card">
+                <SelectContent className="rounded-xl border border-border bg-card">
                   {classes.map((item) => (
                     <SelectItem key={item.id} value={item.id} className="rounded-xl focus:bg-primary">
                       {item.code} • {item.name}
@@ -632,11 +634,11 @@ export default function Classes() {
                 </SelectContent>
               </Select>
 
-              <div className="space-y-2">
-                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
+              <div className="space-y-1.5">
+                <span className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
                   Session Date
                 </span>
-                <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 backdrop-blur-md px-4 py-3.5 focus-within:border-primary/40 focus-within:bg-muted/30 transition-all">
+                <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/20 backdrop-blur-md px-4 py-2.5 focus-within:border-primary/40 focus-within:bg-muted/30 transition-all">
                   <Calendar className="w-4 h-4 text-primary/60" />
                   <input
                     type="date"
@@ -647,25 +649,25 @@ export default function Classes() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
+              <div className="space-y-1.5">
+                <span className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
                   Record Reviewer
                 </span>
                 <input
                   value={reviewerName}
                   onChange={(event) => setReviewerName(event.target.value)}
-                  className="w-full rounded-2xl border border-border bg-muted/20 backdrop-blur-md px-4 py-3.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-muted/30 transition-all"
+                  className="w-full rounded-xl border border-border bg-muted/20 backdrop-blur-md px-4 py-2.5 text-sm text-foreground outline-none focus:border-primary/40 focus:bg-muted/30 transition-all"
                   placeholder="Enter name"
                 />
               </div>
 
-              <div className="space-y-2">
-                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
+              <div className="space-y-1.5">
+                <span className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground font-bold ml-1">
                   Excel Workbook
                 </span>
-                <label className="flex cursor-pointer items-center gap-4 rounded-2xl border-2 border-dashed border-border bg-muted/10 p-5 hover:bg-muted/20 hover:border-primary/30 transition-all group/upload">
-                  <div className="p-3 rounded-xl bg-primary/10 text-primary group-hover/upload:scale-110 transition-transform">
-                    <FileSpreadsheet className="w-6 h-6" />
+                <label className="flex cursor-pointer items-center gap-4 rounded-xl border-2 border-dashed border-border bg-muted/10 p-4 hover:bg-muted/20 hover:border-primary/30 transition-all group/upload">
+                  <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover/upload:scale-110 transition-transform">
+                    <FileSpreadsheet className="w-5 h-5" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-foreground truncate">
@@ -687,24 +689,20 @@ export default function Classes() {
               <button
                 onClick={() => importMutation.mutate()}
                 disabled={importMutation.isPending || liveSessionMutation.isPending}
-                className="w-full rounded-2xl bg-gradient-to-r from-primary via-indigo-600 to-primary bg-[length:200%_auto] hover:bg-right px-4 py-4 text-sm font-bold text-white shadow-xl shadow-primary/20 transition-all duration-500 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
+                className="w-full rounded-xl bg-gradient-to-r from-primary via-indigo-600 to-primary bg-[length:200%_auto] hover:bg-right px-4 py-3.5 text-xs font-bold text-white shadow-xl shadow-primary/20 transition-all duration-500 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
               >
                 {importMutation.isPending ? "Processing..." : "Import & Initialize Recheck"}
               </button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border/40" />
-                </div>
-                <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
-                  <span className="bg-[#1a1c24] px-2 text-muted-foreground/30">OR</span>
-                </div>
+              <div className="flex items-center gap-4 py-1">
+                <div className="h-px flex-1 bg-border/20" />
+                <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/30 whitespace-nowrap px-1">OR</span>
+                <div className="h-px flex-1 bg-border/20" />
               </div>
 
               <button
                 onClick={() => liveSessionMutation.mutate()}
                 disabled={importMutation.isPending || liveSessionMutation.isPending}
-                className="w-full rounded-2xl border border-primary/30 bg-primary/5 hover:bg-primary/10 px-4 py-4 text-sm font-bold text-primary transition-all active:scale-[0.98] disabled:opacity-50"
+                className="w-full rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 px-4 py-3 text-xs font-bold text-primary transition-all active:scale-[0.98] disabled:opacity-50"
               >
                 {liveSessionMutation.isPending ? "Starting..." : "Start Live Session (No File)"}
               </button>
@@ -783,7 +781,7 @@ export default function Classes() {
                           value={resetEnrollmentNo}
                           onChange={(event) => setResetEnrollmentNo(event.target.value.toUpperCase())}
                           className="w-full rounded-xl border border-border bg-muted/20 pl-10 pr-4 py-3 text-sm text-foreground outline-none focus:border-amber-500/30 transition-all"
-                          placeholder="Enrollment #"
+                          placeholder="Enrollment"
                         />
                       </div>
                       <button
@@ -863,14 +861,14 @@ export default function Classes() {
                       item={item}
                       compact
                       isDeleting={deleteHistoryItemMutation.isPending && deletingHistoryId === item.id}
-                        onDelete={() => {
-                          setDeleteConfirmDetails({
-                            title: `Delete ${item.sourceFileName}?`,
-                            description: "This specific Excel upload and its associated attendance recheck records will be permanently removed. This action cannot be reversed.",
-                            onConfirm: () => deleteHistoryItemMutation.mutate(item.id)
-                          });
-                          setDeleteConfirmOpen(true);
-                        }}
+                      onDelete={() => {
+                        setDeleteConfirmDetails({
+                          title: `Delete ${item.sourceFileName}?`,
+                          description: "This specific Excel upload and its associated attendance recheck records will be permanently removed. This action cannot be reversed.",
+                          onConfirm: () => deleteHistoryItemMutation.mutate(item.id)
+                        });
+                        setDeleteConfirmOpen(true);
+                      }}
                     />
                   ))}
                 </div>
@@ -1489,32 +1487,32 @@ export default function Classes() {
 
       {/* Global Deletion Confirmation Dialog */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent className="sm:max-w-[420px] rounded-[2rem] bg-card border-border backdrop-blur-3xl p-6 sm:p-10 shadow-2xl">
-          <AlertDialogHeader className="space-y-4 text-center sm:text-center">
-            <div className="mx-auto w-16 h-16 rounded-[1.5rem] bg-destructive/10 flex items-center justify-center mb-2 shadow-2xl shadow-destructive/10 border border-destructive/20">
-              <Trash2 className="w-8 h-8 text-destructive" strokeWidth={2.5} stroke="currentColor" />
+        <AlertDialogContent className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-40px)] sm:max-w-[400px] rounded-[1.8rem] sm:rounded-[2rem] bg-card border-border backdrop-blur-3xl p-6 sm:p-10 shadow-2xl outline-none">
+          <AlertDialogHeader className="space-y-4 text-center">
+            <div className="mx-auto w-14 h-14 sm:w-16 sm:h-16 rounded-[1.2rem] sm:rounded-[1.5rem] bg-destructive/10 flex items-center justify-center mb-1 sm:mb-2 shadow-2xl shadow-destructive/10 border border-destructive/20">
+              <Trash2 className="w-6 h-6 sm:w-8 sm:h-8 text-destructive" strokeWidth={2} stroke="currentColor" />
             </div>
-            <AlertDialogTitle className="text-2xl font-black text-foreground uppercase tracking-tight">
-              {deleteConfirmDetails?.title}
+            <AlertDialogTitle className="text-xl sm:text-2xl font-bold text-foreground tracking-tight text-center w-full">
+              Delete Live Entry?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm font-medium text-muted-foreground leading-relaxed px-4 text-balance">
-              {deleteConfirmDetails?.description}
+            <AlertDialogDescription className="text-xs sm:text-[15px] font-medium text-muted-foreground/80 leading-relaxed px-2 sm:px-4 text-center w-full">
+              All associated attendance records will be permanently removed. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-10 grid grid-cols-2 gap-3 sm:gap-4 sm:flex-row">
-            <AlertDialogCancel 
-              className="h-12 sm:flex-1 rounded-2xl border-border bg-muted/20 hover:bg-muted/30 text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition-all"
+          <AlertDialogFooter className="mt-8 sm:mt-10 flex flex-row items-center justify-center gap-3 sm:gap-4">
+            <AlertDialogCancel
+              className="mt-0 h-11 sm:h-12 flex-1 rounded-2xl border-border bg-muted/20 hover:bg-muted/30 text-xs sm:text-sm font-semibold transition-all"
             >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              className="h-12 sm:flex-1 rounded-2xl bg-destructive hover:bg-destructive/90 text-[10px] sm:text-[11px] font-black uppercase tracking-widest shadow-xl shadow-destructive/20 transition-all active:scale-[0.98]"
+              className="h-11 sm:h-12 flex-1 rounded-2xl bg-destructive hover:bg-destructive/90 text-xs sm:text-sm font-semibold text-white shadow-lg shadow-destructive/20 transition-all active:scale-[0.98]"
               onClick={() => {
                 deleteConfirmDetails?.onConfirm();
                 setDeleteConfirmOpen(false);
               }}
             >
-              Confirm Delete
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

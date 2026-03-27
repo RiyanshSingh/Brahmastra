@@ -577,12 +577,14 @@ export default function MarkAttendance() {
                         value={selectedClassId}
                         onValueChange={setSelectedClassId}
                       >
-                        <SelectTrigger className="mt-2 w-full h-12 rounded-xl border border-border bg-muted/20 px-4 text-sm font-semibold text-foreground focus:ring-primary/40 transition-all">
-                          <SelectValue placeholder="Choose a class" />
+                        <SelectTrigger className="mt-2 w-full h-11 sm:h-12 rounded-xl border border-border bg-muted/20 px-3 sm:px-4 text-[11px] sm:text-sm font-bold text-foreground focus:ring-primary/40 transition-all">
+                          <div className="flex-1 text-left truncate">
+                            <SelectValue placeholder="Choose a class" />
+                          </div>
                         </SelectTrigger>
                         <SelectContent className="rounded-2xl border border-border bg-card">
                           {activeClasses.map((item) => (
-                            <SelectItem key={item.id} value={item.id} className="rounded-xl focus:bg-primary">
+                            <SelectItem key={item.id} value={item.id} className="rounded-xl focus:bg-primary text-xs sm:text-sm font-medium">
                               {item.code} • {item.name}
                             </SelectItem>
                           ))}

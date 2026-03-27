@@ -1,5 +1,5 @@
 import { defaultClasses } from "./default-classes";
-import { supabase, studentSupabase, teacherSupabase } from "./supabase";
+import { supabase, studentSupabase, teacherSupabase, signupSupabase } from "./supabase";
 
 export type ReviewStatus = "draft" | "recheck_pending" | "finalized";
 export type AttendanceStatus =
@@ -430,12 +430,28 @@ async function ensureDefaultClasses(): Promise<void> {
 }
 
 async function loadClasses(): Promise<DbClass[]> {
-  const { data, error } = await supabase
+  const teacherId = localStorage.getItem("brahmastra_teacher_id");
+
+  let query = supabase
     .from("classes")
     .select("*")
     .order("code", { ascending: true });
 
+  if (teacherId) {
+    query = query.eq('teacher_id', teacherId);
+  }
+
+  const { data, error } = await query;
+
   if (error) {
+    // If teacher_id column doesn't exist in DB yet, fall back to all classes
+    if (error.code === 'PGRST204' || error.message?.includes('teacher_id')) {
+      console.warn("teacher_id column not found in classes table — showing all classes as fallback.");
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("classes").select("*").order("code", { ascending: true });
+      if (fallbackError) throw new Error(`Unable to fetch classes: ${getErrorMessage(fallbackError)}`);
+      return (fallbackData ?? []) as DbClass[];
+    }
     throw new Error(`Unable to fetch classes: ${getErrorMessage(error)}`);
   }
 
@@ -896,10 +912,17 @@ export async function createClass(payload: {
   allowedWifiName?: string | null;
   allowedWifiPublicIp?: string | null;
 }) {
+  const teacherId = localStorage.getItem("brahmastra_teacher_id");
+  // Make code unique per teacher by appending a short suffix of teacher ID
+  // This lets multiple teachers have e.g. "AIDS" as a class code
+  const baseCode = payload.code.trim().toUpperCase();
+  const teacherSuffix = teacherId ? `-${teacherId.slice(0, 4).toUpperCase()}` : "";
+  const uniqueCode = teacherId ? `${baseCode}${teacherSuffix}` : baseCode;
+
   const { data, error } = await supabase
     .from("classes")
     .insert({
-      code: payload.code.trim().toUpperCase(),
+      code: uniqueCode,
       name: payload.name.trim(),
       room: payload.room ?? null,
       schedule_text: payload.scheduleText ?? null,
@@ -908,11 +931,15 @@ export async function createClass(payload: {
       color_end: payload.colorEnd ?? "#7c3aed",
       allowed_wifi_name: null,
       allowed_wifi_public_ip: payload.allowedWifiPublicIp?.trim() || null,
+      teacher_id: teacherId || null
     })
     .select("*")
     .single();
 
   if (error) {
+    if (error.code === '23505') {
+      throw new Error(`Class code "${uniqueCode}" already exists. Please choose a different code.`);
+    }
     throw new Error(`Unable to create class: ${getErrorMessage(error)}`);
   }
 
@@ -1895,10 +1922,9 @@ export async function updateClassQuizEnabled(classId: string, enabled: boolean) 
   if (error) throw error;
 }
 
-export async function verifyTeacherLogin(username: string, password_plaintext: string): Promise<string | null> {
+export async function verifyTeacherLogin(username: string, password_plaintext: string): Promise<{ token: string; fullName: string; id: string } | null> {
   try {
     // Production-ready: Authenticate via Supabase Auth
-    // Use username + internal domain as identifier for teachers
     const email = `${username.toLowerCase()}@brahmastra.internal`;
     const { data, error } = await teacherSupabase.auth.signInWithPassword({
       email,
@@ -1913,7 +1939,7 @@ export async function verifyTeacherLogin(username: string, password_plaintext: s
     // Verify they have a teacher profile
     const { data: profile } = await teacherSupabase
       .from('teacher_profiles')
-      .select('id')
+      .select('id, full_name')
       .eq('auth_user_id', data.session.user.id)
       .maybeSingle();
 
@@ -1923,11 +1949,94 @@ export async function verifyTeacherLogin(username: string, password_plaintext: s
       return null;
     }
 
-    return data.session.access_token;
+    return {
+      token: data.session.access_token,
+      fullName: (profile as any).full_name || username,
+      id: profile.id
+    };
   } catch (err) {
     console.error("Server-less Teacher auth failed:", err);
     return null;
   }
+}
+
+export async function getTeacherProfile() {
+  const { data: { user } } = await teacherSupabase.auth.getUser();
+  if (!user) return null;
+  
+  const { data, error } = await teacherSupabase
+    .from('teacher_profiles')
+    .select('*')
+    .eq('auth_user_id', user.id)
+    .single();
+    
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTeacherProfile(payload: { full_name?: string; designation?: string }) {
+  // Use getSession() – reads from localStorage, no network call needed
+  const { data: { session } } = await teacherSupabase.auth.getSession();
+  if (!session?.user) {
+    console.error("No active teacher session found in localStorage.");
+    throw new Error("Authentication required – please log in again.");
+  }
+
+  const userId = session.user.id;
+
+  // 1. Update Auth User Metadata (stores both name + designation)
+  const { error: authError } = await teacherSupabase.auth.updateUser({
+    data: { full_name: payload.full_name, designation: payload.designation }
+  });
+  if (authError) {
+    console.warn("Auth metadata update warning:", authError.message);
+  }
+
+  // 2. Update teacher_profiles table (row always exists post-registration)
+  const { error } = await teacherSupabase
+    .from('teacher_profiles')
+    .update({
+      full_name: payload.full_name,
+      updated_at: new Date().toISOString()
+    })
+    .eq('auth_user_id', userId);
+
+  if (error) {
+    console.error("teacher_profiles upsert error:", error);
+    throw new Error(`Profile update failed: ${error.message}`);
+  }
+}
+
+export async function createTeacherAccount(username: string, password: string, fullName: string) {
+  const email = `${username.toLowerCase().trim()}@brahmastra.internal`;
+
+  // Use the dedicated signup client (no existing session) to avoid auth contamination
+  // NOTE: Email Confirmation must be DISABLED in Supabase → Auth → Email settings
+  const { data, error } = await signupSupabase.auth.signUp({ 
+    email, 
+    password,
+    options: {
+      data: { full_name: fullName }
+    }
+  });
+
+  if (error) throw new Error(`Account creation failed: ${error.message}`);
+  if (!data.user) throw new Error("Account creation failed: no user returned. Ensure 'Email Confirmations' is disabled in Supabase.");
+
+  // Insert teacher profile row using the admin's session
+  const { error: profileError } = await teacherSupabase
+    .from('teacher_profiles')
+    .insert({
+      auth_user_id: data.user.id,
+      username: username.toLowerCase().trim(),
+      full_name: fullName,
+    });
+  if (profileError) throw new Error(`Profile setup failed: ${profileError.message}`);
+}
+
+export async function changeCurrentPassword(newPassword: string) {
+  const { error } = await teacherSupabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(`Password change failed: ${error.message}`);
 }
 
 export async function deleteClass(classId: string) {

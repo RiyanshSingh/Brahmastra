@@ -60,6 +60,9 @@ export function AppSidebar({
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => {
     return localStorage.getItem("brahmastra_admin_session") === "true";
   });
+  const [adminName, setAdminName] = useState(() => {
+    return localStorage.getItem("brahmastra_admin_name") || "Teacher";
+  });
   const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -73,11 +76,14 @@ export function AppSidebar({
     setIsLoggingIn(true);
     
     try {
-      const token = await verifyTeacherLogin(username, password);
-      if (token) {
+      const result = await verifyTeacherLogin(username, password);
+      if (result) {
         setIsAdminAuthenticated(true);
+        setAdminName(result.fullName);
         localStorage.setItem("brahmastra_admin_session", "true");
-        localStorage.setItem("brahmastra_admin_token", token);
+        localStorage.setItem("brahmastra_admin_token", result.token);
+        localStorage.setItem("brahmastra_admin_name", result.fullName);
+        localStorage.setItem("brahmastra_teacher_id", result.id);
         setIsTeacherPanelOpen(true);
         setIsLoginDialogOpen(false);
         toast({
@@ -114,8 +120,11 @@ export function AppSidebar({
 
   const handleLogout = () => {
     setIsAdminAuthenticated(false);
+    setAdminName("Teacher");
     localStorage.removeItem("brahmastra_admin_session");
     localStorage.removeItem("brahmastra_admin_token");
+    localStorage.removeItem("brahmastra_admin_name");
+    localStorage.removeItem("brahmastra_teacher_id");
     setIsTeacherPanelOpen(false);
     navigate("/");
     toast({
@@ -351,10 +360,10 @@ export function AppSidebar({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">
-                Prof. Davis
+                {adminName}
               </p>
               <p className="text-[11px] font-medium text-muted-foreground mt-0.5 truncate">
-                System Admin
+                Official Teacher
               </p>
             </div>
             <div className="w-8 h-8 rounded-full bg-muted/20 flex items-center justify-center group-hover:bg-destructive/10 group-hover:text-destructive transition-colors shrink-0">

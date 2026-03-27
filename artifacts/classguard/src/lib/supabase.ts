@@ -43,3 +43,17 @@ export const teacherSupabase = createClient(
     },
   },
 );
+
+// Dedicated signup client — used ONLY for creating new teacher accounts.
+// Fresh client with no session so the admin's own token doesn't interfere.
+export const signupSupabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL ?? DEFAULT_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? DEFAULT_SUPABASE_PUBLISHABLE_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      storageKey: "cg-signup-temp",
+    },
+  },
+);

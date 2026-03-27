@@ -21,7 +21,14 @@ export default function Dashboard() {
           <div className="h-[210px]">
             <TotalStudentsCard />
           </div>
-          <div className="flex-1 min-h-[260px]">
+          
+          {/* Mobile Only: Stats and Score before Live Status */}
+          <div className="lg:hidden space-y-5">
+            <StatCards />
+            <ScoreCard />
+          </div>
+
+          <div className="hidden lg:block flex-1 min-h-[260px]">
             <LiveSessionCard />
           </div>
         </div>
@@ -29,8 +36,12 @@ export default function Dashboard() {
         {/* Middle Column */}
         <div className="col-span-1 md:col-span-12 lg:col-span-6 flex flex-col gap-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <ScoreCard />
-            <StatCards />
+            <div className="hidden lg:block">
+              <ScoreCard />
+            </div>
+            <div className="hidden lg:block">
+              <StatCards />
+            </div>
           </div>
           <SessionsChart />
           <AttendanceBreakdown />
@@ -39,6 +50,12 @@ export default function Dashboard() {
         {/* Right Column */}
         <div className="col-span-1 md:col-span-12 lg:col-span-3 flex flex-col gap-5">
           <ActivityCalendar />
+          
+          {/* Mobile Only: Live Status moved to the bottom just before activities */}
+          <div className="lg:hidden">
+            <LiveSessionCard />
+          </div>
+
           <RecentStudents />
         </div>
       </div>
