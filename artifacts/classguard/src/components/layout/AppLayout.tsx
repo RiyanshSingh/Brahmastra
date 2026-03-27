@@ -15,7 +15,8 @@ import {
   FileText,
   BarChart2,
   KeyRound,
-  Smartphone
+  Smartphone,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
@@ -23,7 +24,8 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
-  DialogDescription 
+  DialogDescription,
+  DialogClose
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -236,7 +238,12 @@ export function AppLayout({ children, title, subtitle, action }: AppLayoutProps)
 
       {/* Teacher Login Dialog */}
       <Dialog open={isLoginDialogOpen} onOpenChange={setIsLoginDialogOpen}>
-        <DialogContent className="sm:max-w-[420px] bg-card backdrop-blur-2xl border-border p-0 overflow-hidden rounded-[32px] shadow-2xl">
+        <DialogContent className="sm:max-w-[420px] bg-card backdrop-blur-2xl border-border p-0 overflow-hidden rounded-[32px] shadow-2xl [&>button:last-child]:hidden">
+          <DialogClose asChild>
+            <button className="absolute right-6 top-6 h-8 w-8 rounded-full bg-foreground/[0.03] flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.08] transition-all z-50">
+              <X className="w-4 h-4" />
+            </button>
+          </DialogClose>
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-indigo-500/10 pointer-events-none" />
           
           <form onSubmit={handleLogin}>
