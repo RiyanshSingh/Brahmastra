@@ -8,8 +8,29 @@ import {
   AlertTriangle,
   XCircle,
   Download,
+  PlusCircle,
+  UserPlus,
+  ClipboardList,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { submitManualAttendance } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { cn } from "@/lib/utils";
 import { useReportsData } from "@/hooks/use-attendance-data";
@@ -47,46 +68,89 @@ export default function Reports() {
     range: dateFilter,
   });
 
-  const handleExportPresent = () => {
-    if (!data?.records) return;
+  const [isManualOpen, setIsManualOpen] = useState(false);
+  const [manualName, setManualName] = useState("");
+  const [manualRoll, setManualRoll] = useState("");
+  const [manualClassId, setManualClassId] = useState("");
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-    // Filter only present students from current view
-    const presentRecords = data.records.filter(r => r.status === 'present');
+  const manualMutation = useMutation({
+    mutationFn: async () => {
+      if (!manualName.trim() || !manualRoll.trim() || !manualClassId) {
+        throw new Error("All fields are required");
+      }
+      return submitManualAttendance(manualClassId, {
+        studentName: manualName,
+        rollNo: manualRoll
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+      setIsManualOpen(false);
+      setManualName("");
+      setManualRoll("");
+      toast({
+        title: "Attendance marked",
+        description: `Manually added ${manualName} to the latest session.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to mark attendance",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
 
-    if (presentRecords.length === 0) {
-      alert("No 'Present' records found for the current filters.");
+  const exportToExcel = (records: any[], typeName: string) => {
+    if (records.length === 0) {
+      alert(`No records found for '${typeName}' with current filters.`);
       return;
     }
 
-    const exportData = presentRecords.map(r => ({
+    const exportData = records.map(r => ({
       'Student Name': r.student,
       'Roll No.': r.rollNo,
       'Class': r.classLabel,
       'Date': r.date,
       'Punch Time': r.checkIn,
-      'Review Time': r.reviewedAt || 'N/A',
-      'Status': 'Present',
-      'Notes': r.note || ''
+      'Status': r.status.charAt(0).toUpperCase() + r.status.slice(1)
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Present Students");
+    XLSX.utils.book_append_sheet(workbook, worksheet, typeName);
 
-    // Standard filename with filters info
     const dateStr = new Date().toISOString().split('T')[0];
-    const fileName = `Present_Students_${dateStr}.xlsx`;
+    const fileName = `${typeName.replace(/ /g, '_')}_${dateStr}.xlsx`;
 
     XLSX.writeFile(workbook, fileName);
   };
 
+  const handleExportPresent = () => {
+    const presentRecords = (data?.records ?? []).filter(r => r.status === 'present');
+    exportToExcel(presentRecords, "Present Students");
+  };
+
+  const handleExportAbsent = () => {
+    const absentRecords = (data?.records ?? []).filter(r => r.status === 'absent');
+    exportToExcel(absentRecords, "Absent Students");
+  };
+
+  const handleExportAll = () => {
+    exportToExcel(data?.records ?? [], "All Records");
+  };
+
   return (
-    <div className="p-6">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+    <>
+      <div className="p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {[
             { label: "Total Records", value: data?.summary.total ?? 0, icon: FileText, color: "bg-primary/10 text-primary border-primary/20" },
             { label: "Present Records", value: data?.summary.present ?? 0, icon: CheckCircle2, color: "bg-success/10 text-success border-success/20" },
-            { label: "Needs Audit", value: data?.summary.questionable ?? 0, icon: AlertTriangle, color: "bg-warning/10 text-warning border-warning/20" },
             { label: "Absent Total", value: data?.summary.absent ?? 0, icon: XCircle, color: "bg-destructive/10 text-destructive border-destructive/20" },
           ].map((item, index) => (
             <motion.div
@@ -129,7 +193,6 @@ export default function Reports() {
             options={[
               { value: "all", label: "All Status" },
               { value: "present", label: "Present" },
-              { value: "questionable", label: "Needs Review" },
               { value: "absent", label: "Absent" },
             ]}
             onChange={setStatusFilter}
@@ -149,13 +212,50 @@ export default function Reports() {
 
           <SelectPill value={dateFilter} options={DATE_OPTIONS} onChange={setDateFilter} />
 
-          <button
-            onClick={handleExportPresent}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:scale-[1.03] active:scale-[0.97] transition-all shadow-lg shadow-primary/20"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Download Present
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setIsManualOpen(true)}
+              className="px-4 h-10 rounded-xl bg-orange-500/10 text-orange-500 border border-orange-500/20 text-xs font-bold flex items-center gap-2 hover:bg-orange-500/20 transition-all active:scale-[0.98]"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Manual Entry
+            </button>
+
+            <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                  className="flex items-center gap-2 px-4 h-10 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:scale-[1.03] active:scale-[0.97] transition-all shadow-lg shadow-primary/20"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download
+                  <ChevronDown className="w-3 h-3 opacity-50" />
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 rounded-xl border-border bg-card/95 backdrop-blur-md shadow-2xl p-1.5">
+              <DropdownMenuItem 
+                onClick={handleExportAll}
+                className="rounded-lg text-xs font-bold py-2.5 cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors gap-2"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Download All
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={handleExportPresent}
+                className="rounded-lg text-xs font-bold py-2.5 cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors gap-2"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Download Present
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={handleExportAbsent}
+                className="rounded-lg text-xs font-bold py-2.5 cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors gap-2 text-destructive focus:text-destructive"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                Download Absent
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
           <span className="ml-auto text-xs text-muted-foreground font-medium">
             {data?.records.length ?? 0} record{(data?.records.length ?? 0) !== 1 ? "s" : ""}
@@ -172,7 +272,7 @@ export default function Reports() {
             <table className="w-full min-w-[980px] border-collapse">
               <thead className="sticky top-0 z-20 bg-card/95 backdrop-blur-md shadow-sm">
                 <tr className="border-b border-card-border">
-                  {["Student", "Roll No.", "Class", "Date", "Punch", "Reviewed", "Status", "Note"].map((column) => (
+                  {["Student", "Roll No.", "Class", "Date", "Punch", "Status"].map((column) => (
                     <th
                       key={column}
                       className="px-5 py-3.5 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider"
@@ -186,7 +286,7 @@ export default function Reports() {
                 {isLoading ? (
                   Array.from({ length: 8 }).map((_, index) => (
                     <tr key={index} className="border-b border-card-border/60">
-                      <td colSpan={8} className="px-5 py-4">
+                      <td colSpan={6} className="px-5 py-4">
                         <div className="h-10 rounded-xl bg-muted/40 animate-pulse" />
                       </td>
                     </tr>
@@ -198,12 +298,11 @@ export default function Reports() {
                       <tr key={row.id} className="border-b border-border hover:bg-muted/10 transition-colors group">
                         <td className="px-5 py-4">
                            <div className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">{row.student}</div>
-                           <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground opacity-50 mt-0.5">{row.rollNo}</div>
                         </td>
+                        <td className="px-5 py-4 text-xs font-bold text-muted-foreground">{row.rollNo}</td>
                         <td className="px-5 py-4 text-xs font-bold text-muted-foreground">{row.classLabel}</td>
                         <td className="px-5 py-4 text-xs font-medium text-muted-foreground">{row.date}</td>
                         <td className="px-5 py-4 text-xs font-mono text-foreground font-bold">{row.checkIn}</td>
-                        <td className="px-5 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{row.reviewedAt ?? "—"}</td>
                         <td className="px-5 py-4">
                           <span className={cn(
                             "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider border", 
@@ -213,7 +312,6 @@ export default function Reports() {
                             {status.label}
                           </span>
                         </td>
-                        <td className="px-5 py-4 text-xs text-muted-foreground italic">{row.note ?? "—"}</td>
                       </tr>
                     );
                   })
@@ -230,6 +328,68 @@ export default function Reports() {
           </div>
         </motion.div>
       </div>
+
+      <Dialog open={isManualOpen} onOpenChange={setIsManualOpen}>
+        <DialogContent className="sm:max-w-[420px] bg-card backdrop-blur-2xl border-border p-0 overflow-hidden rounded-[32px] shadow-2xl">
+          <div className="p-8 space-y-6">
+            <div className="space-y-2 text-center">
+              <div className="mx-auto w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center mb-4">
+                <UserPlus className="w-6 h-6 text-primary" strokeWidth={2.5} />
+              </div>
+              <DialogTitle className="text-2xl font-black tracking-tight text-white">Manual Attendance</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">Add a student record manually for the latest session.</DialogDescription>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Select Class</Label>
+                <Select value={manualClassId} onValueChange={setManualClassId}>
+                  <SelectTrigger className="h-12 rounded-2xl bg-muted/20 border-border">
+                    <SelectValue placeholder="Which class?" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl border-border bg-card">
+                    {(data?.classOptions ?? []).map((option) => (
+                      <SelectItem key={option.id} value={option.id} className="rounded-xl">
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Student Name</Label>
+                  <Input
+                    value={manualName}
+                    onChange={(e) => setManualName(e.target.value)}
+                    className="h-12 rounded-2xl bg-muted/20 border-border"
+                    placeholder="e.g. Bittu Kumar"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 ml-1">Enrollment / Roll No.</Label>
+                  <Input
+                    value={manualRoll}
+                    onChange={(e) => setManualRoll(e.target.value.toUpperCase())}
+                    className="h-12 rounded-2xl bg-muted/20 border-border"
+                    placeholder="e.g. 0111AS211001"
+                  />
+                </div>
+              </div>
+
+              <Button
+                onClick={() => manualMutation.mutate()}
+                disabled={manualMutation.isPending}
+                className="w-full h-12 rounded-2xl bg-primary font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
+              >
+                {manualMutation.isPending ? "Adding..." : "Mark as Present"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

@@ -37,7 +37,7 @@ export function SessionsChart() {
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
-              data={data}
+              data={data?.map(d => ({ ...d, total: d.present + d.absent + (d.questionable || 0) }))}
               margin={{ top: 10, right: 10, left: -20, bottom: 25 }}
               barGap={8}
             >
@@ -97,16 +97,16 @@ export function SessionsChart() {
               />
 
               <Bar
-                dataKey="present"
-                name="Verified Present"
-                fill="#8D6CE5"
+                dataKey="total"
+                name="Total Records"
+                fill="#3b82f6"
                 radius={[8, 8, 8, 8]}
                 barSize={20}
               />
               <Bar
-                dataKey="questionable"
-                name="Flagged"
-                fill="#A7C4E5"
+                dataKey="present"
+                name="Verified Present"
+                fill="#8D6CE5"
                 radius={[8, 8, 8, 8]}
                 barSize={20}
               />

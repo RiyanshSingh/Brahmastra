@@ -11,7 +11,7 @@ export function ScoreCard() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.3 }}
-      className="dark-card rounded-[2rem] p-6 border-foreground/[0.08]"
+      className="dark-card rounded-[2rem] p-6 border-foreground/[0.08] flex flex-col lg:min-h-[450px]"
     >
       <div className="flex justify-between items-center mb-6">
         <h3 className="font-semibold text-lg text-foreground">Attendance Score</h3>
@@ -20,7 +20,7 @@ export function ScoreCard() {
         </button>
       </div>
 
-      <div className="flex flex-col items-center justify-center py-4">
+      <div className="flex flex-col items-center justify-center flex-1 py-4 lg:py-8">
         {isLoading ? (
           <Skeleton className="w-32 h-32 rounded-full border-8 border-muted/20" />
         ) : (

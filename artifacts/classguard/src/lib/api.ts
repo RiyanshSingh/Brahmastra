@@ -75,6 +75,7 @@ export type DashboardStats = {
   flaggedToday: number;
   totalStudents: number;
   enrollmentTrend: number;
+  absentToday: number;
   breakdown: {
     verified: number;
     questionable: number;
@@ -550,10 +551,12 @@ function buildClassSummaries(
   classes: DbClass[],
   sessions: DbSession[],
   records: DbRecord[],
+  studentMarks: DbStudentMark[] = []
 ) {
   const today = todayIsoDate();
   const latestSessionByClass = new Map<string, DbSession>();
   const recordsBySession = new Map<string, DbRecord[]>();
+  const marksBySession = new Map<string, DbStudentMark[]>();
 
   for (const session of sessions) {
     if (!latestSessionByClass.has(session.class_id)) {
@@ -570,12 +573,49 @@ function buildClassSummaries(
     }
   }
 
+  for (const mark of studentMarks) {
+    const bucket = marksBySession.get(mark.session_id);
+    if (bucket) {
+      bucket.push(mark);
+    } else {
+      marksBySession.set(mark.session_id, [mark]);
+    }
+  }
+
   return classes.map((classItem) => {
     const latestSession = latestSessionByClass.get(classItem.id) ?? null;
     const latestRecords = latestSession
       ? (recordsBySession.get(latestSession.id) ?? [])
       : [];
-    const summary = summarizeRecords(latestRecords);
+    const latestMarks = latestSession
+      ? (marksBySession.get(latestSession.id) ?? [])
+      : [];
+    
+    // Process counts including marks
+    const markedRolls = new Set(latestMarks.map(m => m.roll_number.toUpperCase()));
+    const rosterRolls = new Set();
+    
+    let verifiedCount = 0;
+    let questionableCount = 0;
+    let absentCount = 0;
+    let uploadedCount = latestRecords.length;
+
+    for (const record of latestRecords) {
+        rosterRolls.add(record.roll_number.toUpperCase());
+        const isMarked = markedRolls.has(record.roll_number.toUpperCase());
+        const status = isMarked ? 'present' : normalizeStatus(record.status);
+        
+        if (status === 'present') verifiedCount++;
+        else if (status === 'questionable') questionableCount++;
+        else if (status === 'absent') absentCount++;
+    }
+
+    // Include extras from live marks
+    const unmatchedMarks = latestMarks.filter(m => !rosterRolls.has(m.roll_number.toUpperCase()));
+    verifiedCount += unmatchedMarks.length;
+    uploadedCount += unmatchedMarks.length;
+
+    const attendanceRate = uploadedCount === 0 ? 0 : roundPercentage((verifiedCount / uploadedCount) * 100);
 
     let status: "active" | "scheduled" | "ended" = "scheduled";
     if (latestSession) {
@@ -605,7 +645,11 @@ function buildClassSummaries(
       allowedRadius: classItem.allowed_radius ?? null,
       quizEnabled: classItem.quiz_enabled ?? false,
       status,
-      ...summary,
+      verifiedCount,
+      questionableCount,
+      absentCount,
+      attendanceRate,
+      uploadedCount,
     } satisfies ClassSummary;
   });
 }
@@ -638,9 +682,27 @@ function cleanPunchRows(rows: ImportedPunchRow[]): ImportedPunchRow[] {
 function formatSessionPayload(
   classItem: DbClass,
   session: DbSession,
-  records: DbRecord[],
-  studentMarks: DbStudentMark[],
+  rawRecords: DbRecord[],
+  rawStudentMarks: DbStudentMark[],
 ): SessionPayload {
+  // 1. Separate actual roster records from "virtual" manual-unmatched records
+  const records = rawRecords.filter(r => r.note !== "@manual-unmatched");
+  
+  // 2. Generate virtual student marks for any record tagged manually by the teacher
+  const virtualMarks: DbStudentMark[] = rawRecords
+    .filter(r => r.note === "@manual-unmatched" || r.note === "@manual-matched" || r.note?.toLowerCase().includes("manual"))
+    .map(r => ({
+      id: `v-mark-${r.id}`,
+      session_id: r.session_id,
+      roll_number: r.roll_number,
+      student_name: r.student_name,
+      marked_at: r.updated_at || r.created_at,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    }));
+
+  const studentMarks = [...rawStudentMarks, ...virtualMarks];
+
   const summary = summarizeRecords(records);
   const markByRoll = new Map(
     studentMarks.map((mark) => [mark.roll_number.toUpperCase(), mark]),
@@ -736,6 +798,7 @@ async function loadOperationalDataset(daysBack = 30) {
   const classes = await loadClasses();
   if (classes.length === 0) return { classes: [], sessions: [], records: [], studentMarks: [] };
 
+  const classIds = classes.map(c => c.id);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - daysBack);
   const cutoffIso = cutoff.toISOString().slice(0, 10);
@@ -743,6 +806,7 @@ async function loadOperationalDataset(daysBack = 30) {
   const { data: sessions, error: sessionError } = await supabase
     .from("attendance_sessions")
     .select("*")
+    .in("class_id", classIds)
     .gte("session_date", cutoffIso)
     .order("session_date", { ascending: false });
 
@@ -778,17 +842,14 @@ export async function getClasses(): Promise<ClassSummary[]> {
   cutoff.setDate(cutoff.getDate() - 45); // 45 days is plenty for a dashboard summary
   const cutoffIso = cutoff.toISOString().slice(0, 10);
 
-  const [sessionsResult, recentlyMarkedResult] = await Promise.all([
+  const [sessionsResult] = await Promise.all([
     supabase
       .from("attendance_sessions")
       .select("*")
       .in("class_id", classIds)
       .gte("session_date", cutoffIso)
-      .order("session_date", { ascending: false }),
-    supabase
-      .from("attendance_student_marks")
-      .select("session_id, roll_number")
-      .gte("created_at", cutoffIso)
+      .order("session_date", { ascending: false })
+      .order("created_at", { ascending: false }),
   ]);
 
   const sessions = (sessionsResult.data ?? []) as DbSession[];
@@ -798,11 +859,19 @@ export async function getClasses(): Promise<ClassSummary[]> {
     sessions.find(s => s.class_id === c.id)?.id
   ).filter(Boolean) as string[];
 
-  // Only fetch records for the LATEST sessions
-  // Optimization: Select only status and session_id since we only need counts for the summary
-  const records = await loadRecordsForSessionIds(latestSessionIds, "id, session_id, status");
+  // 2. Fetch records and marks specifically for the LATEST sessions for each class
+  // Optimization: Select only required fields for summary calculation
+  const [records, marksResult] = await Promise.all([
+    loadRecordsForSessionIds(latestSessionIds, "id, session_id, status, roll_number"),
+    supabase
+      .from("attendance_student_marks")
+      .select("*")
+      .in("session_id", latestSessionIds)
+  ]);
 
-  return buildClassSummaries(classes, sessions, records);
+  if (marksResult.error) throw new Error(getErrorMessage(marksResult.error));
+
+  return buildClassSummaries(classes, sessions, records, (marksResult.data ?? []) as any);
 }
 
 export async function getLatestSession(classId: string): Promise<SessionPayload | null> {
@@ -817,6 +886,7 @@ export async function getLatestSession(classId: string): Promise<SessionPayload 
     `)
     .eq("class_id", classId)
     .order("session_date", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -917,7 +987,8 @@ export async function createClass(payload: {
   // This lets multiple teachers have e.g. "AIDS" as a class code
   const baseCode = payload.code.trim().toUpperCase();
   const teacherSuffix = teacherId ? `-${teacherId.slice(0, 4).toUpperCase()}` : "";
-  const uniqueCode = teacherId ? `${baseCode}${teacherSuffix}` : baseCode;
+  const randomSuffix = `-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+  const uniqueCode = teacherId ? `${baseCode}${teacherSuffix}${randomSuffix}` : `${baseCode}${randomSuffix}`;
 
   const { data, error } = await supabase
     .from("classes")
@@ -1092,7 +1163,7 @@ export async function importPunches(
         upload_count: rows.length,
         review_status: "recheck_pending",
       },
-      { onConflict: "class_id,session_date" },
+      { onConflict: "class_id,session_date" }
     )
     .select("*")
     .single();
@@ -1102,6 +1173,18 @@ export async function importPunches(
   }
 
   const session = requireValue(sessionData as DbSession | null, "Attendance session not found");
+
+  // Preserve existing manual records before deletion (accounting for both new tags and old literal text tags)
+  const { data: allExistingData } = await supabase
+    .from("attendance_records")
+    .select("*")
+    .eq("session_id", session.id);
+
+  const existingManualRecords = (allExistingData ?? []).filter((r: any) => 
+    r.note && (r.note.startsWith("@manual") || r.note.toLowerCase().includes("manual"))
+  ) as DbRecord[];
+  
+  const manualRollsMap = new Map(existingManualRecords.map(r => [r.roll_number.toUpperCase(), r]));
 
   const { error: deleteRecordsError } = await supabase
     .from("attendance_records")
@@ -1121,17 +1204,39 @@ export async function importPunches(
      against the new records.
   */
 
-  const { error: insertError } = await supabase.from("attendance_records").insert(
-    rows.map((row) => ({
+  const now = new Date().toISOString();
+  const excelRolls = new Set(rows.map(r => r.rollNumber.toUpperCase()));
+  const upsertData: any[] = rows.map((row) => {
+    const prevManual = manualRollsMap.get(row.rollNumber.toUpperCase());
+    return {
       session_id: session.id,
       roll_number: row.rollNumber,
       student_name: row.studentName,
       punched_at: row.punchedAt ?? null,
-      status: "pending" as const,
-      note: null,
-      last_verified_at: null,
-    })),
-  );
+      status: "pending" as AttendanceStatus,
+      note: prevManual ? "@manual-matched" : null,
+      last_verified_at: prevManual ? prevManual.last_verified_at : null,
+      created_at: prevManual?.created_at || now,
+    };
+  });
+
+  // Re-inject manual marks that were NOT found in the new excel sheet
+  for (const manual of existingManualRecords) {
+    if (!excelRolls.has(manual.roll_number.toUpperCase())) {
+       upsertData.push({
+         session_id: manual.session_id,
+         roll_number: manual.roll_number,
+         student_name: manual.student_name,
+         status: "pending" as AttendanceStatus,
+         punched_at: null,
+         note: "@manual-unmatched",
+         last_verified_at: manual.last_verified_at,
+         created_at: manual.created_at || now,
+       });
+    }
+  }
+
+  const { error: insertError } = await supabase.from("attendance_records").insert(upsertData);
 
   if (insertError) {
     throw new Error(`Unable to save uploaded rows: ${getErrorMessage(insertError)}`);
@@ -1253,6 +1358,59 @@ export async function saveSessionRecheck(
   return getSessionDetails(sessionId, classItem);
 }
 
+export async function submitManualAttendance(
+  classId: string,
+  payload: {
+    studentName: string;
+    rollNo: string;
+    note?: string;
+  }
+): Promise<void> {
+  // 1. Find the latest session for this class using teacherSupabase to ensure authenticated context
+  const { data: latestSession, error: sessionError } = await teacherSupabase
+    .from("attendance_sessions")
+    .select("id")
+    .eq("class_id", classId)
+    .order("session_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (sessionError) throw new Error(`Unable to find session: ${getErrorMessage(sessionError)}`);
+  if (!latestSession) throw new Error("No active or previous sessions found for this class. Please upload a punch sheet first or start a live session.");
+
+  // 2. We use attendance_records to store manual marks securely, 
+  // bypassing student_marks RLS. We identify them with a special label.
+  const now = new Date().toISOString();
+  
+  const { data: existingRecord } = await teacherSupabase
+    .from("attendance_records")
+    .select("id")
+    .eq("session_id", latestSession.id)
+    .eq("roll_number", payload.rollNo.trim().toUpperCase())
+    .maybeSingle();
+
+  const isMatched = !!existingRecord;
+
+  const { error: upsertError } = await teacherSupabase
+    .from("attendance_records")
+    .upsert(
+      {
+        id: existingRecord?.id, // Use existing ID if matched to avoid duplicate issues just in case
+        session_id: latestSession.id,
+        roll_number: payload.rollNo.trim().toUpperCase(),
+        student_name: payload.studentName.trim(),
+        status: isMatched ? "present" as AttendanceStatus : "pending" as AttendanceStatus,
+        punched_at: isMatched ? undefined : null,
+        note: isMatched ? "@manual-matched" : "@manual-unmatched",
+        last_verified_at: isMatched ? now : null,
+      },
+      { onConflict: "session_id,roll_number" }
+    );
+
+  if (upsertError) throw new Error(`Unable to mark attendance: ${getErrorMessage(upsertError)}`);
+}
+
 export async function submitStudentMark(
   sessionId: string,
   payload: {
@@ -1323,7 +1481,25 @@ export async function getMonthlyActivity(date: Date): Promise<Record<string, "lo
 
 export async function getDashboard(): Promise<DashboardResponse> {
   // Optimization: 14 days is all we need for the dashboard charts and trends
-  const { classes, sessions, records, studentMarks } = await loadOperationalDataset(14);
+  const dataset = await loadOperationalDataset(14);
+  
+  // 1. Separate actual roster records from "virtual" manual-unmatched records
+  const records = dataset.records.filter(r => r.note !== "@manual-unmatched");
+  const virtualMarks: DbStudentMark[] = dataset.records
+    .filter(r => r.note === "@manual-unmatched" || r.note === "@manual-matched" || r.note?.toLowerCase().includes("manual"))
+    .map(r => ({
+      id: `v-mark-${r.id}`,
+      session_id: r.session_id,
+      roll_number: r.roll_number,
+      student_name: r.student_name,
+      marked_at: r.updated_at || r.created_at,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    }));
+  
+  const studentMarks = [...dataset.studentMarks, ...virtualMarks];
+  const { classes, sessions } = dataset;
+
   const classSummaries = buildClassSummaries(classes, sessions, records);
   const sessionMap = new Map(sessions.map((session) => [session.id, session]));
   const classMap = new Map(classes.map((classItem) => [classItem.id, classItem]));
@@ -1455,15 +1631,41 @@ export async function getDashboard(): Promise<DashboardResponse> {
           ((currentWeekVerified - previousWeekVerified) / previousWeekVerified) * 100,
         );
 
-  const recentStudents = [...records]
+  const recentStudents = [
+    ...records,
+    ...studentMarks
+      .filter((mark) => {
+        const sessionRecs = records.filter((r) => r.session_id === mark.session_id);
+        return !sessionRecs.some(
+          (r) => r.roll_number.toUpperCase() === mark.roll_number.toUpperCase()
+        );
+      })
+      .map((m) => ({
+        id: m.id,
+        session_id: m.session_id,
+        student_name: m.student_name,
+        roll_number: m.roll_number,
+        punched_at: m.marked_at,
+        status: "present" as AttendanceStatus,
+        updated_at: m.marked_at,
+        created_at: m.marked_at,
+        note: "Self-marked",
+        last_verified_at: m.marked_at,
+      } as DbRecord))
+  ]
     .sort(
       (left, right) =>
-        new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
+        new Date(right.updated_at || right.created_at).getTime() - 
+        new Date(left.updated_at || left.created_at).getTime(),
     )
     .slice(0, 6)
     .map((record) => {
       const session = sessionMap.get(record.session_id);
       const classItem = session ? classMap.get(session.class_id) : null;
+      const marks = sessionMarksBySession.get(record.session_id);
+      const hasMark = marks?.has(record.roll_number.toUpperCase());
+      const isVerified = record.status === "present" || record.status === "late_present" || hasMark;
+
       return {
         id: record.id,
         name: record.student_name,
@@ -1473,13 +1675,12 @@ export async function getDashboard(): Promise<DashboardResponse> {
           record.punched_at ??
           session?.session_date ??
           new Date(record.updated_at).toLocaleString("en-US"),
-        status:
-          record.status === "present" || record.status === "late_present"
-            ? "verified"
-            : record.status === "absent"
-              ? "absent"
-              : "questionable",
-        className: classItem?.name ?? "Unknown class",
+        status: isVerified
+          ? "verified"
+          : record.status === "absent"
+            ? "absent"
+            : "questionable",
+        className: classItem ? `${classItem.code.split('-')[0]} - ${classItem.name}` : "Unknown class",
       } satisfies StudentCheckIn;
     });
 
@@ -1501,6 +1702,7 @@ export async function getDashboard(): Promise<DashboardResponse> {
       flaggedToday,
       totalStudents,
       enrollmentTrend,
+      absentToday: Math.max(0, totalPossible - verifiedPresent - flaggedToday),
       breakdown: {
         verified: totalPossible === 0 ? 0 : Math.round((verifiedPresent / totalPossible) * 100),
         questionable: totalPossible === 0 ? 0 : Math.round((flaggedToday / totalPossible) * 100),
@@ -1573,22 +1775,45 @@ export async function getReports(params: {
   // Optimization: Use server-side filtering instead of loadOperationalDataset(120)
   // This avoids fetching thousands of irrelevant rows.
   
-  // 1. Fetch filtered sessions first
+  // 1. Fetch the teacher's classes first to ensure data isolation
+  const classes = await loadClasses();
+  const teacherClassIds = classes.map(c => c.id);
+
+  if (teacherClassIds.length === 0) {
+    return {
+      summary: { total: 0, present: 0, questionable: 0, absent: 0 },
+      classOptions: [],
+      records: []
+    };
+  }
+
+  // 1b. Fetch filtered sessions restricted to the teacher's classes
   let sessionsQuery = supabase
     .from("attendance_sessions")
     .select("*")
+    .in("class_id", teacherClassIds)
     .order("session_date", { ascending: false });
 
-  if (params.classId) sessionsQuery = sessionsQuery.eq("class_id", params.classId);
+  if (params.classId) {
+    // Ensure the requested classId actually belongs to this teacher
+    if (!teacherClassIds.includes(params.classId)) {
+        return {
+          summary: { total: 0, present: 0, questionable: 0, absent: 0 },
+          classOptions: classes.map(c => ({ id: c.id, label: `${(c.code || "").split("-")[0]} • ${c.name}` })),
+          records: []
+        };
+    }
+    sessionsQuery = sessionsQuery.eq("class_id", params.classId);
+  }
+  
   if (rangeStart) sessionsQuery = sessionsQuery.gte("session_date", rangeStart);
   
   const { data: sessions, error: sessionError } = await sessionsQuery;
   if (sessionError) throw new Error(getErrorMessage(sessionError));
   if (!sessions || sessions.length === 0) {
-    const classes = await loadClasses();
     return {
       summary: { total: 0, present: 0, questionable: 0, absent: 0 },
-      classOptions: classes.map(c => ({ id: c.id, label: `${c.code} • ${c.name}` })),
+      classOptions: classes.map(c => ({ id: c.id, label: `${(c.code || "").split("-")[0]} • ${c.name}` })),
       records: []
     };
   }
@@ -1596,9 +1821,8 @@ export async function getReports(params: {
   const sessionIds = sessions.map(s => s.id);
   const sessionMap = new Map(sessions.map(s => [s.id, s]));
 
-  // 2. Fetch classes, records and student marks in parallel for the filtered session IDs
-  const [classes, recordsResult, studentMarksResult] = await Promise.all([
-    loadClasses(),
+  // 2. Fetch records and student marks in parallel for the filtered session IDs
+  const [recordsResult, studentMarksResult] = await Promise.all([
     supabase
       .from("attendance_records")
       .select("*")
@@ -1606,19 +1830,38 @@ export async function getReports(params: {
       .order("student_name", { ascending: true }),
     supabase
       .from("attendance_student_marks")
-      .select("session_id, roll_number")
+      .select("*")
       .in("session_id", sessionIds)
   ]);
 
   if (recordsResult.error) throw new Error(getErrorMessage(recordsResult.error));
   
-  const allRecords = (recordsResult.data ?? []) as DbRecord[];
+  const rawRecords = (recordsResult.data ?? []) as DbRecord[];
+  
+  // 3. Separate actual roster records from "virtual" manual-unmatched records
+  const allRecords = rawRecords.filter(r => r.note !== "@manual-unmatched");
+  const virtualMarks: any[] = rawRecords
+    .filter(r => r.note === "@manual-unmatched" || r.note === "@manual-matched" || r.note?.toLowerCase().includes("manual"))
+    .map(r => ({
+      id: `v-mark-${r.id}`,
+      session_id: r.session_id,
+      roll_number: r.roll_number,
+      student_name: r.student_name,
+      marked_at: r.updated_at || r.created_at,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    }));
+
   const classMap = new Map(classes.map(c => [c.id, c]));
+  
+  const allStudentMarks = [...(studentMarksResult.data ?? []) as any[], ...virtualMarks];
   const markedBySessionRoll = new Set(
-    (studentMarksResult.data ?? []).map((m: any) => `${m.session_id}:${m.roll_number.toUpperCase()}`)
+    allStudentMarks.map((m: any) => `${m.session_id}:${m.roll_number.toUpperCase()}`)
   );
 
-  // 3. Process and further filter by status and search term (since text search is easier in JS for small datasets)
+  // 4. Process records and add student marks that don't have a corresponding record (for live sessions without roster)
+  const recordKeys = new Set(allRecords.map(r => `${r.session_id}:${r.roll_number.toUpperCase()}`));
+
   const processedRecords = allRecords.map((record) => {
     const session = sessionMap.get(record.session_id);
     const classItem = session ? classMap.get(session.class_id) : null;
@@ -1631,48 +1874,76 @@ export async function getReports(params: {
       student: record.student_name,
       rollNo: record.roll_number,
       classId: classItem?.id ?? "",
-      classLabel: classItem ? `${classItem.code} • ${classItem.name}` : "Unknown class",
+      classLabel: classItem ? `${(classItem.code || "").split("-")[0]} • ${classItem.name}` : "Unknown class",
       date: session?.session_date ?? "",
-      checkIn: record.punched_at ?? "No punch time",
+      checkIn: record.punched_at && (record.punched_at.includes('T') || record.punched_at.includes('-'))
+        ? new Date(record.punched_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+        : (record.punched_at ?? "No punch time"),
       reviewedAt: record.last_verified_at,
       status: computedStatus,
       rawStatus: record.status,
       note: (record.note ?? "") + (isMarked && record.status === 'pending' ? ' (Marked by student)' : ''),
     };
-  }).filter(r => {
-    if (params.status && params.status !== "all" && r.status !== params.status) return false;
-    if (searchTerm) {
-      const lowerSearch = searchTerm.toLowerCase();
-      return r.student.toLowerCase().includes(lowerSearch) || r.rollNo.toLowerCase().includes(lowerSearch);
-    }
-    return true;
   });
 
+  const unmatchedRecords = allStudentMarks
+    .filter(m => !recordKeys.has(`${m.session_id}:${m.roll_number.toUpperCase()}`))
+    .map(mark => {
+       const session = sessionMap.get(mark.session_id);
+       const classItem = session ? classMap.get(session.class_id) : null;
+       return {
+         id: `mark-${mark.session_id}-${mark.roll_number}`,
+         student: mark.student_name,
+         rollNo: mark.roll_number,
+         classId: classItem?.id ?? "",
+         classLabel: classItem ? `${(classItem.code || "").split("-")[0]} • ${classItem.name}` : "Unknown class",
+         date: session?.session_date ?? "",
+         checkIn: mark.marked_at ? new Date(mark.marked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : "No time",
+         reviewedAt: null,
+         status: "present" as const,
+         rawStatus: "present" as AttendanceStatus,
+         note: "Self-marked (No roster record)",
+       };
+    });
+
+  const allProcessed = [...processedRecords, ...unmatchedRecords]
+    .filter(r => {
+      if (params.status && params.status !== "all" && r.status !== params.status) return false;
+      if (searchTerm) {
+        const lowerSearch = searchTerm.toLowerCase();
+        return r.student.toLowerCase().includes(lowerSearch) || r.rollNo.toLowerCase().includes(lowerSearch);
+      }
+      return true;
+    });
+
   const totals = {
-    total: processedRecords.length,
-    present: processedRecords.filter(r => r.status === "present").length,
-    questionable: processedRecords.filter(r => r.status === "questionable").length,
-    absent: processedRecords.filter(r => r.status === "absent").length,
+    total: allProcessed.length,
+    present: allProcessed.filter(r => r.status === "present").length,
+    questionable: allProcessed.filter(r => r.status === "questionable").length,
+    absent: allProcessed.filter(r => r.status === "absent").length,
   };
 
   return {
     summary: totals,
-    classOptions: classes.map(c => ({ id: c.id, label: `${c.code} • ${c.name}` })),
-    records: processedRecords.sort((a, b) => b.date.localeCompare(a.date) || a.student.localeCompare(b.student))
+    classOptions: classes.map(c => ({ id: c.id, label: `${(c.code || "").split("-")[0]} • ${c.name}` })),
+    records: allProcessed.sort((a, b) => b.date.localeCompare(a.date) || a.student.localeCompare(b.student))
   };
 }
 
 export async function getAnalytics(): Promise<AnalyticsResponse> {
   // Optimization: Fetch only 60 days of data for analytics instead of 180 to avoid large payloads.
   // This is enough for the weekly trend and KPI calculations.
-  const { classes, sessions, records } = await loadOperationalDataset(60);
+  const { classes, sessions, records, studentMarks } = await loadOperationalDataset(60);
   const sessionMap = new Map(sessions.map((session) => [session.id, session]));
   const classMap = new Map(classes.map((classItem) => [classItem.id, classItem]));
 
-  const totalCount = records.length;
+  const recordKeys = new Set(records.map(r => `${r.session_id}:${r.roll_number.toUpperCase()}`));
+  const unmatchedMarks = studentMarks.filter(m => !recordKeys.has(`${m.session_id}:${m.roll_number.toUpperCase()}`));
+
+  const totalCount = records.length + unmatchedMarks.length;
   const presentCount = records.filter(
     (record) => normalizeStatus(record.status) === "present",
-  ).length;
+  ).length + unmatchedMarks.length;
   const questionableCount = records.filter(
     (record) => normalizeStatus(record.status) === "questionable",
   ).length;
@@ -1687,17 +1958,26 @@ export async function getAnalytics(): Promise<AnalyticsResponse> {
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
     const label = `W${index + 1}`;
+    
     const weekRecords = records.filter((record) => {
       const session = sessionMap.get(record.session_id);
       if (!session) return false;
       const date = new Date(session.session_date);
       return date >= weekStart && date <= weekEnd;
     });
+
+    const weekUnmatched = unmatchedMarks.filter((mark) => {
+      const session = sessionMap.get(mark.session_id);
+      if (!session) return false;
+      const date = new Date(session.session_date);
+      return date >= weekStart && date <= weekEnd;
+    });
+
     const summary = summarizeRecords(weekRecords);
-    const total = Math.max(summary.uploadedCount, 1);
+    const total = Math.max(summary.uploadedCount + weekUnmatched.length, 1);
     return {
       week: label,
-      present: Math.round((summary.verifiedCount / total) * 100),
+      present: Math.round(((summary.verifiedCount + weekUnmatched.length) / total) * 100),
       questionable: Math.round((summary.questionableCount / total) * 100),
       absent: Math.round((summary.absentCount / total) * 100),
     };

@@ -96,7 +96,7 @@ const STATUS_OPTIONS: AttendanceStatus[] = [
 const CLASS_STATUS_CONFIG = {
   active: { label: "Recheck active", dot: "bg-success", text: "text-[#15803d] dark:text-success bg-success/15" },
   scheduled: { label: "Waiting for upload", dot: "bg-warning", text: "text-[#92400e] dark:text-warning bg-warning/15" },
-  ended: { label: "Reviewed", dot: "bg-muted-foreground", text: "text-muted-foreground bg-muted" },
+  ended: { label: "Finalized", dot: "bg-muted-foreground", text: "text-muted-foreground bg-muted" },
 } as const;
 
 export default function Classes() {
@@ -357,11 +357,27 @@ export default function Classes() {
 
       return saveSessionRecheck(latestSession.session.id, {
         reviewerName,
-        updates: latestSession.records.map((record) => ({
-          recordId: record.id,
-          status: draftStatuses[record.id] ?? record.status,
-          note: draftNotes[record.id]?.trim() || null,
-        })),
+        updates: latestSession.records.map((record) => {
+          const newNote = draftNotes[record.id]?.trim() || null;
+          let finalNote = newNote;
+          
+          // CRITICAL: Preserve backend manual markers so virtual student marks survive save updates!
+          if (record.note?.startsWith("@manual")) {
+            finalNote = newNote ? `${record.note} || ${newNote}` : record.note;
+          }
+
+          // Fully automated attendance calculation 
+          let finalStatus = record.status;
+          if (finalStatus === "pending") {
+            finalStatus = record.studentMarked ? "present" : "absent";
+          }
+
+          return {
+            recordId: record.id,
+            status: finalStatus,
+            note: finalNote,
+          };
+        }),
       });
     },
     onSuccess: async (data) => {
@@ -500,7 +516,7 @@ export default function Classes() {
         scheduleText: newClassSchedule
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (data: any) => {
       await queryClient.invalidateQueries({ queryKey: ["classes"] });
       setIsCreateClassOpen(false);
       setNewClassCode("");
@@ -509,7 +525,7 @@ export default function Classes() {
       setNewClassSchedule("");
       toast({
         title: "Class Created",
-        description: "Your new classroom has been successfully initialized in the system.",
+        description: `Successfully initialized ${data.code} • ${data.name}.`,
       });
     },
     onError: (error: Error) => {
@@ -597,7 +613,7 @@ export default function Classes() {
                     <button
                       onClick={() => {
                         setDeleteConfirmDetails({
-                          title: `Permanently delete ${currentClass.code}?`,
+                          title: `Permanently delete ${currentClass.code?.split('-')[0]} • ${currentClass.name}?`,
                           description: "All class history, student records, and attendance data will be permanently wiped from the database. This action cannot be undone.",
                           onConfirm: () => deleteClassMutation.mutate(currentClass.id)
                         });
@@ -628,7 +644,7 @@ export default function Classes() {
                 <SelectContent className="rounded-xl border border-border bg-card">
                   {classes.map((item) => (
                     <SelectItem key={item.id} value={item.id} className="rounded-xl focus:bg-primary">
-                      {item.code} • {item.name}
+                      {item.code?.split('-')[0]} • {item.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -741,7 +757,7 @@ export default function Classes() {
                   <div className="rounded-2xl border border-border bg-muted/20 p-4 flex items-center justify-between">
                     <div>
                       <div className="text-sm font-bold text-foreground">
-                        {latestSession.session.classCode} • {latestSession.session.className}
+                        {latestSession.session.classCode?.split('-')[0]} • {latestSession.session.className}
                       </div>
                       <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mt-1 opacity-60">
                         {latestSession.session.sessionDate}
@@ -828,7 +844,7 @@ export default function Classes() {
                 )}
               </div>
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold opacity-60">
-                {currentClass ? `History for ${currentClass.code}` : "Previously uploaded sheets"}
+                {currentClass ? `History for ${currentClass.code?.split('-')[0]}` : "Previously uploaded sheets"}
               </p>
             </div>
 
@@ -918,7 +934,7 @@ export default function Classes() {
             </div>
             {currentClass && (
               <span className="px-4 py-1.5 rounded-full bg-muted/20 border border-border text-[10px] uppercase font-black tracking-[0.1em] text-muted-foreground">
-                {currentClass.code} System Configuration
+                {currentClass.code?.split('-')[0]} System Configuration
               </span>
             )}
           </div>
@@ -1043,16 +1059,16 @@ export default function Classes() {
               </div>
 
               <div className="space-y-6">
-                <div className="rounded-[1.5rem] bg-gradient-to-br from-white/[0.05] to-transparent border border-border p-6">
-                  <div className="flex items-center gap-3 mb-5">
+                <div className="rounded-[1.5rem] bg-gradient-to-br from-white/[0.05] to-transparent border border-border p-6 md:p-4">
+                  <div className="flex items-center gap-3 mb-5 md:mb-3">
                     <div className="p-2 rounded-lg bg-success/10 text-[#15803d] dark:text-success">
                       <ShieldCheck className="w-5 h-5" />
                     </div>
                     <span className="text-sm font-bold text-foreground tracking-tight">Active Sensor Feedback</span>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-muted/40 border border-border/60 group/ip-helper transition-colors hover:bg-muted/60">
+                  <div className="space-y-4 md:space-y-2">
+                    <div className="p-4 md:p-3 rounded-2xl bg-muted/40 border border-border/60 group/ip-helper transition-colors hover:bg-muted/60">
                       <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-70 mb-2">My Network IP</div>
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-sm font-mono text-foreground font-bold truncate">
@@ -1069,7 +1085,7 @@ export default function Classes() {
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-muted/40 border border-border/60 group/loc-helper transition-colors hover:bg-muted/60">
+                    <div className="p-4 md:p-3 rounded-2xl bg-muted/40 border border-border/60 group/loc-helper transition-colors hover:bg-muted/60">
                       <div className="flex justify-between items-center mb-2">
                         <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground opacity-70">My Current Location</div>
                         {detectedLocation?.accuracy && (
@@ -1102,7 +1118,7 @@ export default function Classes() {
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10">
+                    <div className="p-4 md:p-2.5 rounded-2xl bg-blue-500/5 border border-blue-500/10">
                       <div className="flex items-center gap-2 mb-2">
                         <Clock className="w-3.5 h-3.5 text-blue-400" />
                         <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400">Match Logic</span>
@@ -1249,7 +1265,7 @@ export default function Classes() {
               disabled={!latestSession || saveMutation.isPending}
               className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {saveMutation.isPending ? "Saving review..." : "Save Recheck"}
+              {saveMutation.isPending ? "Publishing..." : "Publish Attendance"}
             </button>
           </div>
 
@@ -1262,7 +1278,7 @@ export default function Classes() {
               <table className="w-full min-w-[980px] border-collapse">
                 <thead className="sticky top-0 z-20 bg-card/95 backdrop-blur-md shadow-sm">
                   <tr className="border-b border-card-border">
-                    {["Student", "Roll No.", "Punch Time", "Student Mark", "Status", "Note"].map((column) => (
+                    {["Student", "Roll No.", "Punch Time", "Student Mark"].map((column) => (
                       <th
                         key={column}
                         className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
@@ -1286,7 +1302,7 @@ export default function Classes() {
                           </div>
                           <div>
                             <div className="text-sm font-semibold text-foreground">{record.studentName}</div>
-                            <div className="text-xs text-muted-foreground">{getStatusLabel(draftStatuses[record.id] ?? record.status)}</div>
+                            <div className="text-xs text-muted-foreground">{getStatusLabel(draftStatuses[record.id] ?? (record.studentMarked && record.status === "pending" ? "present" : record.status))}</div>
                           </div>
                         </div>
                       </td>
@@ -1310,41 +1326,6 @@ export default function Classes() {
                               : "Waiting for student mark"}
                           </div>
                         </div>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <Select
-                          value={draftStatuses[record.id] ?? record.status}
-                          onValueChange={(val) =>
-                            setDraftStatuses((current) => ({
-                              ...current,
-                              [record.id]: val as AttendanceStatus,
-                            }))
-                          }
-                        >
-                          <SelectTrigger className="w-full h-10 rounded-xl border border-border bg-muted/20 px-3 text-xs font-semibold text-foreground focus:ring-primary/40 transition-all">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-2xl border border-border bg-card backdrop-blur-2xl">
-                            {STATUS_OPTIONS.map((status) => (
-                              <SelectItem key={status} value={status} className="rounded-xl focus:bg-primary">
-                                {getStatusLabel(status)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <input
-                          value={draftNotes[record.id] ?? ""}
-                          onChange={(event) =>
-                            setDraftNotes((current) => ({
-                              ...current,
-                              [record.id]: event.target.value,
-                            }))
-                          }
-                          className="w-full rounded-xl border border-card-border bg-muted/60 px-3 py-2 text-sm text-foreground outline-none"
-                          placeholder="Optional note"
-                        />
                       </td>
                     </tr>
                   ))}
@@ -1729,13 +1710,13 @@ function ClassCard({
         <div className="relative z-10 flex items-start justify-between">
           <div className="px-2.5 py-1 rounded-lg bg-white/20 backdrop-blur-md border border-border/40">
             <span className="text-white text-[10px] font-black uppercase tracking-[0.2em]">
-              {classItem.code}
+              {classItem.code?.split('-')[0]}
             </span>
           </div>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/30 backdrop-blur-md border border-border">
             <Users className="w-3 h-3 text-foreground/80" />
             <span className="text-[10px] font-bold text-white leading-none">
-              {classItem.expectedStudents}
+              {classItem.uploadedCount}
             </span>
           </div>
         </div>
@@ -1768,10 +1749,9 @@ function ClassCard({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {[
               { label: "Verified", value: classItem.verifiedCount, tone: "text-[#15803d] dark:text-success", bg: "bg-success/5 border-success/10" },
-              { label: "Check", value: classItem.questionableCount, tone: "text-[#92400e] dark:text-warning", bg: "bg-warning/5 border-warning/10" },
               { label: "Missing", value: classItem.absentCount, tone: "text-destructive", bg: "bg-destructive/5 border-destructive/10" },
             ].map((item) => (
               <div key={item.label} className={cn("rounded-xl p-2.5 text-center border", item.bg)}>

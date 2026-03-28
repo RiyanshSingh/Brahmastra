@@ -6,7 +6,6 @@ export function AttendanceBreakdown() {
   const { data, isLoading } = useDashboardStats();
   const stats = [
     { label: "Verified Present", value: data?.breakdown.verified ?? 0, color: "#22c55e" }, 
-    { label: "Needs Review", value: data?.breakdown.questionable ?? 0, color: "#facc15" }, 
     { label: "Absent today", value: data?.breakdown.absent ?? 0, color: "#ef4444" },
   ];
 
@@ -25,8 +24,8 @@ export function AttendanceBreakdown() {
       </div>
       
       {isLoading ? (
-        <div className="grid grid-cols-3 gap-4 flex-1 items-center">
-          {[1, 2, 3].map(i => (
+        <div className="grid grid-cols-2 gap-4 flex-1 items-center">
+          {[1, 2].map(i => (
             <div key={i} className="flex flex-col items-center gap-4">
               <Skeleton className="w-24 h-24 rounded-full" />
               <Skeleton className="h-3 w-20 rounded-full" />
@@ -34,7 +33,7 @@ export function AttendanceBreakdown() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-4 flex-1 items-center">
+        <div className="grid grid-cols-2 gap-4 flex-1 items-center">
           {stats.map((stat, idx) => (
             <CircularStat 
               key={idx} 

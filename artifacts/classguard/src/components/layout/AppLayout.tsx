@@ -161,7 +161,7 @@ export function AppLayout({ children, title, subtitle, action }: AppLayoutProps)
         localStorage.setItem("brahmastra_admin_name", result.fullName);
         localStorage.setItem("brahmastra_teacher_id", result.id);
         setIsLoginDialogOpen(false);
-        toast({ title: "Access Granted", description: "Welcome back, Professor." });
+        toast({ title: "Access Granted", description: "Welcome back, Professor.", duration: 2000 });
         navigate("/dashboard");
       } else {
         toast({ title: "Error", description: "Invalid credentials.", variant: "destructive" });
@@ -296,7 +296,22 @@ export function AppLayout({ children, title, subtitle, action }: AppLayoutProps)
                 {theme === "light-premium" && <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-primary group-hover:rotate-12 transition-transform" />}
               </button>
 
-              {!isAdminAuthenticated ? (
+              {isAdminAuthenticated && location !== "/" ? (
+                <div className="flex items-center gap-4">
+                  <div className="hidden lg:flex h-10 items-center gap-3 rounded-2xl bg-foreground/[0.03] border border-foreground/[0.05] px-4">
+                     <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                     <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">{adminName} Active</span>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsProfileOpen(true)}
+                    className="rounded-2xl border-foreground/10 hover:bg-foreground/[0.03] hover:border-primary/30 transition-all font-bold group gap-2"
+                  >
+                    <User className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
+                    Profile
+                  </Button>
+                </div>
+              ) : !isAdminAuthenticated ? (
                 <div className="flex items-center gap-2 sm:gap-3">
                   {/* Mobile Teacher Login Shortcut */}
                   <button 
@@ -320,21 +335,14 @@ export function AppLayout({ children, title, subtitle, action }: AppLayoutProps)
                   </Button>
                 </div>
               ) : (
-                <div className="flex items-center gap-4">
-                  <div className="hidden lg:flex h-10 items-center gap-3 rounded-2xl bg-foreground/[0.03] border border-foreground/[0.05] px-4">
-                     <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                     <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">{adminName} Active</span>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setIsProfileOpen(true)}
-                    className="rounded-2xl border-foreground/10 hover:bg-foreground/[0.03] hover:border-primary/30 transition-all font-bold group gap-2"
-                  >
-                    <User className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
-                    Profile
-                  </Button>
-                </div>
-             )}
+                /* Authenticated Teacher on Student Page: Show Login/Logout options or just Login shortcut for consistency */
+                <button 
+                  onClick={() => setIsLoginDialogOpen(true)}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-all active:scale-95 group"
+                >
+                  <LogIn className="w-4 h-4 text-primary" />
+                </button>
+              )}
           </div>
         </div>
       </header>
@@ -366,7 +374,7 @@ export function AppLayout({ children, title, subtitle, action }: AppLayoutProps)
       </main>
 
       {/* Mobile Bottom Navigation Gear */}
-      {isAdminAuthenticated && (
+      {isAdminAuthenticated && location !== "/" && (
         <nav className={cn(
           "fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-48px)] max-w-lg z-50 lg:hidden pointer-events-auto transition-all duration-500 ease-in-out",
           isNavVisible ? "translate-y-0 opacity-100 scale-100" : "translate-y-24 opacity-0 scale-95"

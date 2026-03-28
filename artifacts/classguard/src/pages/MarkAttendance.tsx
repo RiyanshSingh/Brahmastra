@@ -585,7 +585,7 @@ export default function MarkAttendance() {
                         <SelectContent className="rounded-2xl border border-border bg-card">
                           {activeClasses.map((item) => (
                             <SelectItem key={item.id} value={item.id} className="rounded-xl focus:bg-primary text-xs sm:text-sm font-medium">
-                              {item.code} • {item.name}
+                              {item.code?.split('-')[0]} • {item.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -674,7 +674,7 @@ export default function MarkAttendance() {
                         <div className="flex items-center justify-between gap-4">
                           <div>
                             <div className="text-[10px] uppercase tracking-[0.28em] text-white/70 font-bold">
-                              {selectedClass.code}
+                              {selectedClass.code?.split('-')[0]}
                             </div>
                             <h4 className="mt-1 text-2xl font-bold">{selectedClass.name}</h4>
                           </div>
